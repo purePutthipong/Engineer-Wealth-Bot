@@ -63,6 +63,13 @@ for ticker in ['QQQM', 'SMH']:
         except:
             next_div = "Check Web"
 
+        news_text = ""
+        try:
+            news = t_data.news
+            if news:
+                news_text = f"📰 News: *{news[0]['title']}*"
+        except: news_text = ""
+
         is_uptrend = latest_price > sma120
         is_oversold = rsi < 35
         
@@ -79,6 +86,8 @@ for ticker in ['QQQM', 'SMH']:
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
+        # --- (ตำแหน่งเดิมของคุณ) ลบ news_text ออกจากตรงนี้ แล้วย้ายไปไว้ข้างล่างครับ ---
+
         trend_icon = "🟢" if is_uptrend else "🔴"
         trend_text = "UP" if is_uptrend else "DOWN"
 
@@ -86,7 +95,15 @@ for ticker in ['QQQM', 'SMH']:
         msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} {trend_text})\n"
         msg_body += f"RSI: `{rsi:.1f}` | Last Div: `{next_div}`\n"
         msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
-        msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n\n"
+        msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n"
+        
+        # --- ย้ายมาวางตรงนี้เพื่อให้ข่าวสรุปท้ายข้อมูลหุ้นแต่ละตัว ---
+        if news_text:
+            msg_body += f"{news_text}\n"
+        
+        msg_body += "\n" # เว้นบรรทัดระหว่างหุ้นแต่ละตัว
+
+    
         
     except Exception as e: print(f"❌ Error {ticker}: {e}")
 header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
