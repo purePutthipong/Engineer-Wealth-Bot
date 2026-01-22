@@ -6,12 +6,10 @@ import os
 
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 
-# ฟังก์ชันดึงค่าจาก GitHub Inputs
 def get_config(env_key, default_val):
     val = os.environ.get(env_key)
     return float(val) if val and val.strip() != "" else default_val
 
-# ตั้งค่าพอร์ตแบบไดนามิก 100% (ดึงค่าทุนเฉลี่ยและจำนวนหุ้นจากหน้าเว็บ)
 PORTFOLIO_HOLDINGS = {
     'QQQM': {
         'qty': get_config('INPUT_QQQM_QTY', 0.47901), 
@@ -24,7 +22,6 @@ PORTFOLIO_HOLDINGS = {
     'CASH': get_config('INPUT_CASH_BALANCE', 100.00)
 }
 
-# สูตรคำนวณ RSI แบบเขียนเองเพื่อความเสถียรบน GitHub Actions
 def calculate_rsi(data, window=14):
     delta = data.diff()
     up = delta.clip(lower=0)
@@ -46,15 +43,24 @@ signals = []
 
 for ticker in ['QQQM', 'SMH']:
     try:
-        df = yf.download(ticker, period="1y", progress=False)
-        if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        t_data = yf.Ticker(ticker)
+        df = t_data.history(period="1y") # ใช้ history เพื่อความเสถียร
         
         latest_price = df['Close'].iloc[-1]
         rsi = calculate_rsi(df['Close']).iloc[-1]
         sma120 = df['Close'].rolling(window=120).mean().iloc[-1]
         
-        # --- DCA SNIPER LOGIC ---
-        # เงื่อนไข: RSI < 35 (ราคาถูก) และ ยืนเหนือ SMA120 (ขาขึ้น)
+        # --- NEW: ดึงข้อมูลวันปันผล (Feature จาก Finbot) ---
+        next_div = "Checking..."
+        try:
+            # ดึงข้อมูล Calendar เพื่อหาวันปันผลถัดไป
+            cal = t_data.calendar
+            if cal is not None and 'Dividend Date' in cal:
+                next_div = cal['Dividend Date'].strftime('%Y-%m-%d')
+            else:
+                next_div = "No data"
+        except: next_div = "TBD"
+
         is_uptrend = latest_price > sma120
         is_oversold = rsi < 35
         
@@ -65,27 +71,23 @@ for ticker in ['QQQM', 'SMH']:
         elif not is_uptrend:
             action_msg = "\n⚠️ *Warning: Below SMA120 (Down Trend)*"
         
-        # คำนวณพอร์ต
         qty = PORTFOLIO_HOLDINGS[ticker]['qty']
         cost = PORTFOLIO_HOLDINGS[ticker]['avg_cost']
         current_val = latest_price * qty
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
-     # --- กำหนดตัวแปร trend ให้ถูกต้องก่อนนำไปใช้ ---
-        trend = "🟢 UP" if is_uptrend else "🔴 DOWN"
         trend_text = "UP" if is_uptrend else "DOWN"
         trend_icon = "🟢" if is_uptrend else "🔴"
 
-        # --- ปรับรูปแบบข้อความตามความต้องการของคุณ ---
         msg_body += f"**💎 {ticker}**\n"
         msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} {trend_text})\n"
-        msg_body += f"RSI: `{rsi:.1f}`\n"
+        msg_body += f"RSI: `{rsi:.1f}` | Div: `{next_div}`\n" # เพิ่มข้อมูลปันผลที่นี่
         msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
         msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n\n"
+        
     except Exception as e: print(f"❌ Error {ticker}: {e}")
 
-# สร้างส่วนสรุปข้อมูล
 header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
 if signals:
     header = f"🔥 **DCA SNIPER ALERT!** 🔥\n" + header
