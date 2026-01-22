@@ -2,9 +2,18 @@ name: Engineer Wealth Bot Auto-Run
 
 on:
   schedule:
-    # ตั้งเวลารันทุกวันตอน 01:00 UTC (ประมาณ 08:00 น. เวลาไทย)
-    - cron: '0 1 * * *'
-  workflow_dispatch: # ปุ่มสำหรับกดรันเองเพื่อทดสอบ
+    - cron: '0 1 * * *'  # รันทุกวันตอน 8 โมงเช้าไทย
+  workflow_dispatch:      # ปุ่มกดรันเองและกรอกข้อมูล
+    inputs:
+      qqqm_qty:
+        description: 'จำนวนหุ้น QQQM ล่าสุด'
+        default: '0.47901'
+      smh_qty:
+        description: 'จำนวนหุ้น SMH ล่าสุด'
+        default: '0.12767'
+      cash_balance:
+        description: 'เงินสดคงเหลือ ($)'
+        default: '0.60'
 
 jobs:
   build:
@@ -20,10 +29,13 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
+          pip install yfinance pandas requests numpy<2.0.0
 
       - name: Run Bot
         env:
-          # เชื่อมโยงค่าจาก Secret ของ GitHub เข้าสู่ตัวแปรระบบ
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          # ส่งค่าจากหน้าจอ GitHub เข้าไปใน Python
+          INPUT_QQQM_QTY: ${{ github.event.inputs.qqqm_qty }}
+          INPUT_SMH_QTY: ${{ github.event.inputs.smh_qty }}
+          INPUT_CASH_BALANCE: ${{ github.event.inputs.cash_balance }}
         run: python bot.py
