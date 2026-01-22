@@ -6,12 +6,12 @@ import os
 
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 
-# ฟังก์ชันดึงค่าจาก GitHub
+# ฟังก์ชันดึงค่าจาก GitHub Inputs
 def get_config(env_key, default_val):
     val = os.environ.get(env_key)
     return float(val) if val and val.strip() != "" else default_val
 
-# ตั้งค่าพอร์ตแบบไดนามิก 100%
+# ตั้งค่าพอร์ตแบบไดนามิก 100% (ดึงค่าทุนเฉลี่ยและจำนวนหุ้นจากหน้าเว็บ)
 PORTFOLIO_HOLDINGS = {
     'QQQM': {
         'qty': get_config('INPUT_QQQM_QTY', 0.47901), 
@@ -24,6 +24,7 @@ PORTFOLIO_HOLDINGS = {
     'CASH': get_config('INPUT_CASH_BALANCE', 100.00)
 }
 
+# สูตรคำนวณ RSI แบบเขียนเองเพื่อความเสถียรบน GitHub Actions
 def calculate_rsi(data, window=14):
     delta = data.diff()
     up = delta.clip(lower=0)
@@ -38,29 +39,49 @@ def send_discord_alert(content):
     data = {"content": content, "username": "Engineer Wealth Bot", "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712009.png"}
     requests.post(DISCORD_WEBHOOK_URL, json=data)
 
-print(f"🔄 System Running... Control Panel Mode")
+print(f"🔄 System Running... DCA Sniper Mode Activated")
 total_port_value = PORTFOLIO_HOLDINGS['CASH']
 msg_body = ""
+signals = []
 
 for ticker in ['QQQM', 'SMH']:
     try:
         df = yf.download(ticker, period="1y", progress=False)
         if isinstance(df.columns, pd.MultiIndex): df.columns = df.columns.get_level_values(0)
+        
         latest_price = df['Close'].iloc[-1]
         rsi = calculate_rsi(df['Close']).iloc[-1]
         sma120 = df['Close'].rolling(window=120).mean().iloc[-1]
         
+        # --- DCA SNIPER LOGIC ---
+        # เงื่อนไข: RSI < 35 (ราคาถูก) และ ยืนเหนือ SMA120 (ขาขึ้น)
+        is_uptrend = latest_price > sma120
+        is_oversold = rsi < 35
+        
+        action_msg = ""
+        if is_uptrend and is_oversold:
+            action_msg = "\n🚨 **BUY SIGNAL DETECTED!** (Dip in Uptrend)"
+            signals.append(ticker)
+        elif not is_uptrend:
+            action_msg = "\n⚠️ *Warning: Below SMA120 (Down Trend)*"
+        
+        # คำนวณพอร์ต
         qty = PORTFOLIO_HOLDINGS[ticker]['qty']
         cost = PORTFOLIO_HOLDINGS[ticker]['avg_cost']
         current_val = latest_price * qty
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
-        trend = "🟢 UP" if latest_price > sma120 else "🔴 DOWN"
-        msg_body += f"**💎 {ticker}**\n> Price: `${latest_price:.2f}` ({trend})\n> RSI: `{rsi:.1f}`\n> P/L: `{pl_pct:+.2f}%` (Qty: {qty})\n\n"
+        trend_icon = "🟢" if is_uptrend else "🔴"
+        msg_body += f"**💎 {ticker}** {trend_icon}\n> Price: `${latest_price:.2f}` | RSI: `{rsi:.1f}`\n> P/L: `{pl_pct:+.2f}%` (Cost: ${cost}){action_msg}\n\n"
     except Exception as e: print(f"❌ Error {ticker}: {e}")
 
+# สร้างส่วนสรุปข้อมูล
 header = f"🤖 **ENGINEER BOT REPORT** 📅 {datetime.date.today()}\n"
+if signals:
+    header = f"🔥 **DCA SNIPER ALERT!** 🔥\n" + header
+
 summary = f"💰 **Total Wealth:** `${total_port_value:.2f}`\n💵 **Buffer:** `${PORTFOLIO_HOLDINGS['CASH']:.2f}`"
-alert = "\n\n⚠️ **CRITICAL ALERT** ⚠️\nBuffer Low (<$100). **STOP TRADING.**" if PORTFOLIO_HOLDINGS['CASH'] < 100 else ""
+alert = "\n\n⚠️ **CRITICAL ALERT**\nBuffer Low (<$100). **REFILL CASH.**" if PORTFOLIO_HOLDINGS['CASH'] < 100 else ""
+
 send_discord_alert(header + "-"*20 + "\n" + msg_body + "-"*20 + "\n" + summary + alert)
