@@ -9,13 +9,11 @@ import pandas_ta as ta
 import requests
 import pandas as pd
 import datetime
+import os  # เพิ่ม Library สำหรับดึงค่าความลับ
 
-# ================= CONFIGURATION =================
+# [SECURITY UPDATE] ดึงลิงก์จากระบบความลับของ GitHub
+DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 
-# [CONFIRMED] ลิงก์ Webhook ของคุณถูกฝังเรียบร้อยแล้ว
-DISCORD_WEBHOOK_URL = 'https://discord.com/api/webhooks/1463838732460228672/EI0xmG9Jm0FerOyo_8FyNTPUCXlGO8p6G_-n0b2P8tip8nSxkqWZwar-As67BgjLoWpb'
-
-# ข้อมูลพอร์ต (อัปเดตล่าสุด Phase 1)
 PORTFOLIO_HOLDINGS = {
     'QQQM': {'qty': 0.47901, 'avg_cost': 253.28},
     'SMH':  {'qty': 0.12767, 'avg_cost': 399.83},
@@ -24,13 +22,15 @@ PORTFOLIO_HOLDINGS = {
 
 TICKERS = ['QQQM', 'SMH']
 
-# ================= FUNCTION: SEND DISCORD =================
 def send_discord_alert(content):
-    data = {
-        "content": content,
-        "username": "Engineer Wealth Bot",
-        "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712009.png" # รูปหุ่นยนต์
-    }
+    if not DISCORD_WEBHOOK_URL:
+        print("❌ Error: Webhook URL not found in Secrets!")
+        return
+    data = {"content": content, 
+            "username": "Engineer Wealth Bot" ,
+            "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712009.png"}
+    requests.post(DISCORD_WEBHOOK_URL, json=data)
+    
     try:
         response = requests.post(DISCORD_WEBHOOK_URL, json=data)
         if response.status_code == 204:
