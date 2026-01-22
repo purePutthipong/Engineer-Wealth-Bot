@@ -72,8 +72,13 @@ for ticker in ['QQQM', 'SMH']:
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
+        # --- ปรับรูปแบบข้อความตามความต้องการของคุณ ---
         trend_icon = "🟢" if is_uptrend else "🔴"
-        msg_body += f"**💎 {ticker}** {trend_icon}\n> Price: `${latest_price:.2f}` | RSI: `{rsi:.1f}`\n> P/L: `{pl_pct:+.2f}%` (Cost: ${cost}){action_msg}\n\n"
+        msg_body += f"**💎 {ticker}**\n"
+        msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} {trend.split()[1]})\n"
+        msg_body += f"RSI: `{rsi:.1f}`\n"
+        msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
+        msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n\n"
     except Exception as e: print(f"❌ Error {ticker}: {e}")
 
 # สร้างส่วนสรุปข้อมูล
