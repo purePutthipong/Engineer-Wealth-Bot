@@ -1,4 +1,4 @@
 yfinance
 pandas
-pandas-ta
 requests
+https://github.com/twopirllc/pandas-ta/archive/refs/heads/master.zip
