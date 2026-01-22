@@ -1,4 +1,5 @@
 yfinance
-pandas
+pandas==2.0.3
+numpy==1.24.3
+pandas-ta==0.3.14b0
 requests
-https://github.com/twopirllc/pandas-ta/archive/refs/heads/master.zip
