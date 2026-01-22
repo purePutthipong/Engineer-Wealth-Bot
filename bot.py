@@ -6,18 +6,22 @@ import os
 
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 
-# ฟังก์ชันดึงค่าจาก GitHub Inputs (ถ้าไม่มีให้ใช้ค่าเริ่มต้นใน Code)
+# ฟังก์ชันดึงค่าจาก GitHub
 def get_config(env_key, default_val):
     val = os.environ.get(env_key)
-    if val is None or val.strip() == "":
-        return default_val
-    return float(val)
+    return float(val) if val and val.strip() != "" else default_val
 
-# ตั้งค่าพอร์ต (ดึงจากหน้าเว็บ GitHub อัตโนมัติ)
+# ตั้งค่าพอร์ตแบบไดนามิก 100%
 PORTFOLIO_HOLDINGS = {
-    'QQQM': {'qty': get_config('INPUT_QQQM_QTY', 0.47901), 'avg_cost': 253.28},
-    'SMH':  {'qty': get_config('INPUT_SMH_QTY', 0.12767), 'avg_cost': 399.83},
-    'CASH': get_config('INPUT_CASH_BALANCE', 0.60)
+    'QQQM': {
+        'qty': get_config('INPUT_QQQM_QTY', 0.47901), 
+        'avg_cost': get_config('INPUT_QQQM_COST', 253.28)
+    },
+    'SMH': {
+        'qty': get_config('INPUT_SMH_QTY', 0.12767), 
+        'avg_cost': get_config('INPUT_SMH_COST', 399.83)
+    },
+    'CASH': get_config('INPUT_CASH_BALANCE', 100.00)
 }
 
 def calculate_rsi(data, window=14):
