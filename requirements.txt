@@ -1,3 +1,4 @@
 yfinance
-pandas==2.0.3
+pandas
 requests
+numpy<2.0.0
