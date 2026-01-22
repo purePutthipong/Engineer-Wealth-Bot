@@ -2,8 +2,9 @@ name: Engineer Wealth Bot Auto-Run
 
 on:
   schedule:
-    - cron: '0 1 * * *'  # รันทุกวันตอน 8 โมงเช้าไทย
-  workflow_dispatch:
+    - cron: '0 1 * * 1-5'  # เวลา 08:00 น. ไทย (จันทร์-ศุกร์)
+    - cron: '0 14 * * 1-5' # เวลา 21:00 น. ไทย (จันทร์-ศุกร์)
+  workflow_dispatch:      # ปุ่มกดรันเองยังอยู่เหมือนเดิม
     inputs:
       qqqm_qty:
         description: 'จำนวนหุ้น QQQM'
