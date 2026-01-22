@@ -3,17 +3,23 @@ name: Engineer Wealth Bot Auto-Run
 on:
   schedule:
     - cron: '0 1 * * *'  # รันทุกวันตอน 8 โมงเช้าไทย
-  workflow_dispatch:      # ปุ่มกดรันเองและกรอกข้อมูล
+  workflow_dispatch:
     inputs:
       qqqm_qty:
-        description: 'จำนวนหุ้น QQQM ล่าสุด'
+        description: 'จำนวนหุ้น QQQM'
         default: '0.47901'
+      qqqm_cost:
+        description: 'ราคาทุนเฉลี่ย QQQM ($)'
+        default: '253.28'
       smh_qty:
-        description: 'จำนวนหุ้น SMH ล่าสุด'
+        description: 'จำนวนหุ้น SMH'
         default: '0.12767'
+      smh_cost:
+        description: 'ราคาทุนเฉลี่ย SMH ($)'
+        default: '399.83'
       cash_balance:
         description: 'เงินสดคงเหลือ ($)'
-        default: '0.60'
+        default: '100.00'
 
 jobs:
   build:
@@ -34,8 +40,9 @@ jobs:
       - name: Run Bot
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          # ส่งค่าจากหน้าจอ GitHub เข้าไปใน Python
           INPUT_QQQM_QTY: ${{ github.event.inputs.qqqm_qty }}
+          INPUT_QQQM_COST: ${{ github.event.inputs.qqqm_cost }}
           INPUT_SMH_QTY: ${{ github.event.inputs.smh_qty }}
+          INPUT_SMH_COST: ${{ github.event.inputs.smh_cost }}
           INPUT_CASH_BALANCE: ${{ github.event.inputs.cash_balance }}
         run: python bot.py
