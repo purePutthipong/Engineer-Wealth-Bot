@@ -1,0 +1,26 @@
+name: Engineer Wealth Bot Auto-Run
+
+on:
+  schedule:
+    # ตั้งเวลารันทุกวันตอน 01:00 UTC (ประมาณ 08:00 น. เวลาไทย)
+    - cron: '0 1 * * *'
+  workflow_dispatch: # ปุ่มสำหรับกดรันเองเพื่อทดสอบ
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Bot
+        run: python bot.py
