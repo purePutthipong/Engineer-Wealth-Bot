@@ -23,4 +23,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Bot
+        env:
+          # เชื่อมโยงค่าจาก Secret ของ GitHub เข้าสู่ตัวแปรระบบ
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python bot.py
