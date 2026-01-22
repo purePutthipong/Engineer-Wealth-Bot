@@ -44,32 +44,34 @@ signals = []
 for ticker in ['QQQM', 'SMH']:
     try:
         t_data = yf.Ticker(ticker)
-        df = t_data.history(period="1y") # ใช้ history เพื่อความเสถียร
+        # ดึงข้อมูลราคา (ใช้ period="1y" เพื่อคำนวณ RSI/SMA)
+        df = t_data.history(period="1y") 
         
         latest_price = df['Close'].iloc[-1]
         rsi = calculate_rsi(df['Close']).iloc[-1]
         sma120 = df['Close'].rolling(window=120).mean().iloc[-1]
         
-        # --- NEW: ดึงข้อมูลวันปันผล (Feature จาก Finbot) ---
-        next_div = "Checking..."
+        # --- ปรับปรุงส่วนปันผลเพื่อหลีกเลี่ยง Error 404 ---
+        next_div = "N/A"
         try:
-            # ดึงข้อมูล Calendar เพื่อหาวันปันผลถัดไป
-            cal = t_data.calendar
-            if cal is not None and 'Dividend Date' in cal:
-                next_div = cal['Dividend Date'].strftime('%Y-%m-%d')
-            else:
-                next_div = "No data"
-        except: next_div = "TBD"
+            # ดึงเฉพาะข้อมูลพื้นฐานที่จำเป็น
+            info = t_data.fast_info
+            # ลองดึงจากส่วน dividends โดยตรง (ถ้ามี)
+            div_history = t_data.dividends
+            if not div_history.empty:
+                next_div = div_history.index[-1].strftime('%Y-%m-%d')
+        except:
+            next_div = "Check Web"
 
         is_uptrend = latest_price > sma120
         is_oversold = rsi < 35
         
         action_msg = ""
         if is_uptrend and is_oversold:
-            action_msg = "\n🚨 **BUY SIGNAL DETECTED!** (Dip in Uptrend)"
+            action_msg = "\n🚨 **BUY SIGNAL DETECTED!**"
             signals.append(ticker)
         elif not is_uptrend:
-            action_msg = "\n⚠️ *Warning: Below SMA120 (Down Trend)*"
+            action_msg = "\n⚠️ *Warning: Down Trend*"
         
         qty = PORTFOLIO_HOLDINGS[ticker]['qty']
         cost = PORTFOLIO_HOLDINGS[ticker]['avg_cost']
@@ -77,17 +79,16 @@ for ticker in ['QQQM', 'SMH']:
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
-        trend_text = "UP" if is_uptrend else "DOWN"
         trend_icon = "🟢" if is_uptrend else "🔴"
+        trend_text = "UP" if is_uptrend else "DOWN"
 
         msg_body += f"**💎 {ticker}**\n"
         msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} {trend_text})\n"
-        msg_body += f"RSI: `{rsi:.1f}` | Div: `{next_div}`\n" # เพิ่มข้อมูลปันผลที่นี่
+        msg_body += f"RSI: `{rsi:.1f}` | Last Div: `{next_div}`\n"
         msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
         msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n\n"
         
     except Exception as e: print(f"❌ Error {ticker}: {e}")
-
 header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
 if signals:
     header = f"🔥 **DCA SNIPER ALERT!** 🔥\n" + header
