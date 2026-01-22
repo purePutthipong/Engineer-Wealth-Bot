@@ -86,7 +86,7 @@ for ticker in ['QQQM', 'SMH']:
     except Exception as e: print(f"❌ Error {ticker}: {e}")
 
 # สร้างส่วนสรุปข้อมูล
-header = f"🤖 **ENGINEER BOT REPORT** 📅 {datetime.date.today()}\n"
+header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
 if signals:
     header = f"🔥 **DCA SNIPER ALERT!** 🔥\n" + header
 
