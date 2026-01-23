@@ -38,12 +38,13 @@ jobs:
         run: |
           pip install yfinance pandas requests "numpy<2.0.0"
 
-      - name: Run Bot
+      - name: Run Trading Bot
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          INPUT_QQQM_QTY: ${{ github.event.inputs.qqqm_qty }}
-          INPUT_QQQM_COST: ${{ github.event.inputs.qqqm_cost }}
-          INPUT_SMH_QTY: ${{ github.event.inputs.smh_qty }}
-          INPUT_SMH_COST: ${{ github.event.inputs.smh_cost }}
-          INPUT_CASH_BALANCE: ${{ github.event.inputs.cash_balance }}
+          # เชื่อมตัวแปรจาก GitHub Variables เข้าสู่ Python
+          INPUT_QQQM_QTY: ${{ vars.QQQM_QTY }}
+          INPUT_QQQM_COST: ${{ vars.QQQM_COST }}
+          INPUT_SMH_QTY: ${{ vars.SMH_QTY }}
+          INPUT_SMH_COST: ${{ vars.SMH_COST }}
+          INPUT_CASH_BALANCE: ${{ vars.PORT_CASH }}
         run: python bot.py
