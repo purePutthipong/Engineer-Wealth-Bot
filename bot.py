@@ -69,11 +69,35 @@ for ticker in ['QQQM', 'SMH']:
             if not div_history.empty: next_div = div_history.index[-1].strftime('%Y-%m-%d')
         except: pass
 
+        # ---------------------------------------------------
+        # 📰 2. ส่วนดึงข่าว (UPGRADED NEWS LOGIC)
+        # ---------------------------------------------------
         news_text = ""
         try:
-            news = t_data.news
-            if news: news_text = f"📰 News: *{news[0]['title']}*"
-        except: pass
+            # ดึงข่าวและสั่ง Print ออกมาดูใน Logs เสมอ (เพื่อ Debug)
+            news_list = t_data.news
+            
+            # ถ้ามีข่าว และลิสต์ไม่ว่างเปล่า
+            if news_list and isinstance(news_list, list) and len(news_list) > 0:
+                latest_story = news_list[0]
+                title = latest_story.get('title', 'No Title')
+                
+                # กรองข่าวที่ไม่เกี่ยวกับหุ้น (บางที Yahoo ส่งโฆษณามา)
+                if ticker in title or "Market" in title or "Tech" in title or "Chip" in title:
+                     news_text = f"📰 News: *{title}*"
+                else:
+                     # ถ้าชื่อข่าวไม่มีคีย์เวิร์ด ก็เอามาแสดงอยู่ดี ดีกว่าเงียบ
+                     news_text = f"📰 News: *{title}*"
+                
+                print(f"✅ Found News for {ticker}: {title}")
+            else:
+                print(f"⚠️ Yahoo returned EMPTY news for {ticker} (Common on GitHub Actions)")
+
+        except Exception as e:
+            print(f"❌ Error fetching news for {ticker}: {e}")
+            # ไม่ต้องให้ news_text ว่าง ให้ใส่ Error ไปเลยจะได้รู้
+            # news_text = "" 
+        # ---------------------------------------------------
 
         is_uptrend = latest_price > sma120
         # ใช้ค่า RSI ที่แยกกันของแต่ละตัวมาเช็ก
