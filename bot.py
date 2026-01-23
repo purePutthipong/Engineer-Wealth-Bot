@@ -72,32 +72,35 @@ for ticker in ['QQQM', 'SMH']:
         # ---------------------------------------------------
         # 📰 2. ส่วนดึงข่าว (UPGRADED NEWS LOGIC)
         # ---------------------------------------------------
+        # ---------------------------------------------------
+        # 📰 2. ส่วนดึงข่าว (CLEAN UI VERSION)
+        # ---------------------------------------------------
         news_text = ""
         try:
-            # ดึงข่าวและสั่ง Print ออกมาดูใน Logs เสมอ (เพื่อ Debug)
             news_list = t_data.news
             
-            # ถ้ามีข่าว และลิสต์ไม่ว่างเปล่า
             if news_list and isinstance(news_list, list) and len(news_list) > 0:
                 latest_story = news_list[0]
-                title = latest_story.get('title', 'No Title')
                 
-                # กรองข่าวที่ไม่เกี่ยวกับหุ้น (บางที Yahoo ส่งโฆษณามา)
-                if ticker in title or "Market" in title or "Tech" in title or "Chip" in title:
-                     news_text = f"📰 News: *{title}*"
+                # ลองดึง Title ถ้าไม่มีให้เป็นค่าว่าง ""
+                title = latest_story.get('title', "")
+                
+                # เช็กว่า title ต้องมีค่า และไม่ใช่สตริงว่าง
+                if title:
+                    # กรองข่าวขยะ (Option) หรือจะเอาออกถ้าอยากเห็นทุกข่าว
+                    if ticker in title or "Market" in title or "Tech" in title or "Chip" in title:
+                        news_text = f"📰 News: *{title}*"
+                    else:
+                        news_text = f"📰 News: *{title}*"
+                    
+                    print(f"✅ Found News: {title}")
                 else:
-                     # ถ้าชื่อข่าวไม่มีคีย์เวิร์ด ก็เอามาแสดงอยู่ดี ดีกว่าเงียบ
-                     news_text = f"📰 News: *{title}*"
-                
-                print(f"✅ Found News for {ticker}: {title}")
+                    print(f"⚠️ News found but NO TITLE key available: {latest_story}")
             else:
-                print(f"⚠️ Yahoo returned EMPTY news for {ticker} (Common on GitHub Actions)")
+                print(f"⚠️ Empty news list for {ticker}")
 
         except Exception as e:
-            print(f"❌ Error fetching news for {ticker}: {e}")
-            # ไม่ต้องให้ news_text ว่าง ให้ใส่ Error ไปเลยจะได้รู้
-            # news_text = "" 
-        # ---------------------------------------------------
+            print(f"❌ Error fetching news: {e}")
 
         is_uptrend = latest_price > sma120
         # ใช้ค่า RSI ที่แยกกันของแต่ละตัวมาเช็ก
