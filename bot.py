@@ -8,18 +8,28 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 
 def get_config(env_key, default_val):
     val = os.environ.get(env_key)
-    return float(val) if val and val.strip() != "" else default_val
+    try:
+        # ถ้ามีค่าส่งมาจาก GitHub (Env Var) ให้ใช้ค่านั้น
+        if val and val.strip() != "":
+            return float(val)
+    except:
+        pass
+    # ถ้าไม่มีจริงๆ ค่อยใช้ค่า Default (แต่วิธีใหม่นี้จะมีค่าเสมอ)
+    return default_val
 
+# --- 🎯 UPDATED CONFIG: แยกค่า RSI Trigger ของใครของมัน ---
 PORTFOLIO_HOLDINGS = {
     'QQQM': {
-        'qty': get_config('INPUT_QQQM_QTY', 0.47901), 
-        'avg_cost': get_config('INPUT_QQQM_COST', 253.28)
+        'qty': get_config('INPUT_QQQM_QTY', 0.0), 
+        'avg_cost': get_config('INPUT_QQQM_COST', 0.0),
+        'rsi_trigger': 50
     },
     'SMH': {
-        'qty': get_config('INPUT_SMH_QTY', 0.12767), 
-        'avg_cost': get_config('INPUT_SMH_COST', 399.83)
+        'qty': get_config('INPUT_SMH_QTY', 0.0), 
+        'avg_cost': get_config('INPUT_SMH_COST', 0.0),
+        'rsi_trigger': 45  # ⚡ SMH ผันผวนกว่า รอให้ย่อลึกกว่า QQQM นิดนึง (45) ค่อยยิง
     },
-    'CASH': get_config('INPUT_CASH_BALANCE', 100.00)
+    'CASH': get_config('INPUT_CASH_BALANCE', 175.04)
 }
 
 def calculate_rsi(data, window=14):
@@ -36,7 +46,7 @@ def send_discord_alert(content):
     data = {"content": content, "username": "Engineer Wealth Bot", "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712009.png"}
     requests.post(DISCORD_WEBHOOK_URL, json=data)
 
-print(f"🔄 System Running... DCA Sniper Mode Activated")
+print(f"🔄 System Running... Advanced Sniper Mode Activated")
 total_port_value = PORTFOLIO_HOLDINGS['CASH']
 msg_body = ""
 signals = []
@@ -44,38 +54,34 @@ signals = []
 for ticker in ['QQQM', 'SMH']:
     try:
         t_data = yf.Ticker(ticker)
-        # ดึงข้อมูลราคา (ใช้ period="1y" เพื่อคำนวณ RSI/SMA)
-        df = t_data.history(period="1y") 
+        df = t_data.history(period="1y")
         
         latest_price = df['Close'].iloc[-1]
         rsi = calculate_rsi(df['Close']).iloc[-1]
         sma120 = df['Close'].rolling(window=120).mean().iloc[-1]
         
-        # --- ปรับปรุงส่วนปันผลเพื่อหลีกเลี่ยง Error 404 ---
+        # ดึง RSI Trigger เฉพาะของหุ้นตัวนั้นๆ
+        target_rsi = PORTFOLIO_HOLDINGS[ticker]['rsi_trigger']
+
         next_div = "N/A"
         try:
-            # ดึงเฉพาะข้อมูลพื้นฐานที่จำเป็น
-            info = t_data.fast_info
-            # ลองดึงจากส่วน dividends โดยตรง (ถ้ามี)
             div_history = t_data.dividends
-            if not div_history.empty:
-                next_div = div_history.index[-1].strftime('%Y-%m-%d')
-        except:
-            next_div = "Check Web"
+            if not div_history.empty: next_div = div_history.index[-1].strftime('%Y-%m-%d')
+        except: pass
 
         news_text = ""
         try:
             news = t_data.news
-            if news:
-                news_text = f"📰 News: *{news[0]['title']}*"
-        except: news_text = ""
+            if news: news_text = f"📰 News: *{news[0]['title']}*"
+        except: pass
 
         is_uptrend = latest_price > sma120
-        is_oversold = rsi < 35
+        # ใช้ค่า RSI ที่แยกกันของแต่ละตัวมาเช็ก
+        is_oversold = rsi < target_rsi 
         
         action_msg = ""
         if is_uptrend and is_oversold:
-            action_msg = "\n🚨 **BUY SIGNAL DETECTED!**"
+            action_msg = f"\n🚨 **BUY SIGNAL!** (RSI < {target_rsi})"
             signals.append(ticker)
         elif not is_uptrend:
             action_msg = "\n⚠️ *Warning: Down Trend*"
@@ -86,31 +92,22 @@ for ticker in ['QQQM', 'SMH']:
         pl_pct = ((latest_price - cost) / cost) * 100
         total_port_value += current_val
 
-        # --- (ตำแหน่งเดิมของคุณ) ลบ news_text ออกจากตรงนี้ แล้วย้ายไปไว้ข้างล่างครับ ---
-
         trend_icon = "🟢" if is_uptrend else "🔴"
-        trend_text = "UP" if is_uptrend else "DOWN"
-
+        
         msg_body += f"**💎 {ticker}**\n"
-        msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} {trend_text})\n"
-        msg_body += f"RSI: `{rsi:.1f}` | Last Div: `{next_div}`\n"
+        msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} UP)\n"
+        # แสดงค่า RSI Target ในวงเล็บให้เห็นชัดๆ
+        msg_body += f"RSI: `{rsi:.1f}` (Target < {target_rsi}) | Div: `{next_div}`\n"
         msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
         msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n"
-        
-        # --- ย้ายมาวางตรงนี้เพื่อให้ข่าวสรุปท้ายข้อมูลหุ้นแต่ละตัว ---
-        if news_text:
-            msg_body += f"{news_text}\n"
-        
-        msg_body += "\n" # เว้นบรรทัดระหว่างหุ้นแต่ละตัว
+        if news_text: msg_body += f"{news_text}\n"
+        msg_body += "\n"
 
-    
-        
     except Exception as e: print(f"❌ Error {ticker}: {e}")
-header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
-if signals:
-    header = f"🔥 **DCA SNIPER ALERT!** 🔥\n" + header
 
-summary = f"💰 **Total Wealth:** `${total_port_value:.2f}`\n💵 **Buffer:** `${PORTFOLIO_HOLDINGS['CASH']:.2f}`"
-alert = "\n\n⚠️ **CRITICAL ALERT**\nBuffer Low (<$100). **REFILL CASH.**" if PORTFOLIO_HOLDINGS['CASH'] < 100 else ""
+header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
+if signals: header = f"🔥 **SNIPER ALERT!** 🔥\n" + header
+summary = f"💰 **Wealth:** `${total_port_value:.2f}`\n💵 **Buffer:** `${PORTFOLIO_HOLDINGS['CASH']:.2f}`"
+alert = "\n\n⚠️ **REFILL CASH** (<$100)" if PORTFOLIO_HOLDINGS['CASH'] < 100 else ""
 
 send_discord_alert(header + "-"*20 + "\n" + msg_body + "-"*20 + "\n" + summary + alert)
