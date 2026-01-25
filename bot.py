@@ -118,7 +118,7 @@ def get_portfolio_dashboard():
     # Table 1: Tactical Dashboard (ตัดเส้นขีดให้สั้นลงและพอดี)
     msg += "**📊 Tactical Dashboard**\n```\n"
     msg += f"{'Asset':<6} {'Price':>8} {'%Chg':>8} {'RSI':>4}  {'Signal'}\n"
-    msg += "-"*41 + "\n" # ปรับความยาวเส้นให้พอดีเป๊ะ
+    msg += "-"*38 + "\n" # ปรับความยาวเส้นให้พอดีเป๊ะ
     for row in tactical_rows:
         msg += row + "\n"
     msg += "```\n"
