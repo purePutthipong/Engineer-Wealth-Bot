@@ -128,7 +128,7 @@ def get_portfolio_dashboard():
     # Table 1: Tactical Dashboard
     msg += "**📊 Tactical Dashboard**\n```\n"
     msg += f"{'Asset':<6} {'Price':>8} {'%Chg':>8} {'RSI':>4}  {'Signal'}\n"
-    msg += "-"*39 + "\n" 
+    msg += "-"*38 + "\n" 
     for row in tactical_rows:
         msg += row + "\n"
     msg += "```\n"
