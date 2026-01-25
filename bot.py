@@ -1,153 +1,153 @@
 import yfinance as yf
 import pandas as pd
+import pandas_ta as ta
+from tabulate import tabulate
 import requests
 import datetime
 import os
 
-DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
-
-def get_config(env_key, default_val):
-    val = os.environ.get(env_key)
+# --- ⚙️ HELPER FUNCTION ---
+# ฟังก์ชันช่วยดึงค่าจาก GitHub Secrets (แปลงเป็นตัวเลขให้อัตโนมัติ)
+def get_env_float(key, default=0.0):
+    val = os.environ.get(key)
     try:
         if val and val.strip() != "":
             return float(val)
-    except: pass
-    return default_val
+    except:
+        pass
+    return default
 
-# --- CONFIG ---
-PORTFOLIO_HOLDINGS = {
+# --- ⚙️ CONFIGURATION ---
+DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
+
+# ดึงข้อมูลจาก GitHub Environment Variables (ตาม V1)
+MY_HOLDINGS = {
     'QQQM': {
-        'qty': get_config('INPUT_QQQM_QTY', 0.0), 
-        'avg_cost': get_config('INPUT_QQQM_COST', 0.0),
-        'rsi_trigger': 50
+        'qty': get_env_float('INPUT_QQQM_QTY', 0.0),
+        'cost': get_env_float('INPUT_QQQM_COST', 0.0)
     },
     'SMH': {
-        'qty': get_config('INPUT_SMH_QTY', 0.0), 
-        'avg_cost': get_config('INPUT_SMH_COST', 0.0),
-        'rsi_trigger': 45
+        'qty': get_env_float('INPUT_SMH_QTY', 0.0),
+        'cost': get_env_float('INPUT_SMH_COST', 0.0)
     },
-    'CASH': get_config('INPUT_CASH_BALANCE', 175.04)
+    'CASH': get_env_float('INPUT_CASH_BALANCE', 175.04)
 }
 
-def calculate_rsi(data, window=14):
-    delta = data.diff()
-    up = delta.clip(lower=0)
-    down = -1 * delta.clip(upper=0)
-    ema_up = up.ewm(com=window-1, adjust=False).mean()
-    ema_down = down.ewm(com=window-1, adjust=False).mean()
-    rs = ema_up / ema_down
-    return 100 - (100 / (1 + rs))
-
-# --- 🧠 NEW FUNCTION: ดึงค่า Fear & Greed ---
-def get_fear_and_greed():
-    try:
-        # ยิง Request ไปที่ API ของ CNN โดยตรง
-        url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-        r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
-        
-        # แกะข้อมูล JSON
-        score = int(data['fear_and_greed']['score'])
-        rating = data['fear_and_greed']['rating'] # e.g., "Extreme Fear"
-        
-        return score, rating
-    except Exception as e:
-        print(f"⚠️ Failed to get Fear & Greed: {e}")
-        return None, None
+# กฎเหล็ก 70/30 (Master Plan)
+PORTFOLIO_CONFIG = {
+    'QQQM': {'weight': 0.70, 'name': 'Nasdaq 100 (Core)'},
+    'SMH':  {'weight': 0.30, 'name': 'Semiconductors (Turbo)'}
+}
+TICKERS = list(PORTFOLIO_CONFIG.keys())
 
 def send_discord_alert(content):
-    if not DISCORD_WEBHOOK_URL: return
-    data = {"content": content, "username": "Engineer Wealth Bot", "avatar_url": "https://cdn-icons-png.flaticon.com/512/4712/4712009.png"}
-    requests.post(DISCORD_WEBHOOK_URL, json=data)
-
-# --- MAIN LOGIC ---
-print(f"🔄 System Running... Market Mood Sensor Activated")
-total_port_value = PORTFOLIO_HOLDINGS['CASH']
-msg_body = ""
-signals = []
-
-# 1. ดึง Fear & Greed Index ก่อนเริ่มวิเคราะห์หุ้น
-fg_score, fg_rating = get_fear_and_greed()
-fg_text = ""
-
-if fg_score:
-    # Logic แปลความหมายคะแนน
-    if fg_score < 25:
-        emoji = "🟢"
-        status = "**EXTREME FEAR (Opportunities Ahead!)**"
-    elif fg_score > 75:
-        emoji = "🔴"
-        status = "**EXTREME GREED (Be Careful)**"
-    else:
-        emoji = "😐"
-        status = f"{fg_rating.title()}"
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️ No Webhook. Console only.")
+        print(content)
+        return
     
-    fg_text = f"🌡️ **Market Mood:** `{fg_score}/100` {emoji} {status}\n" + "-"*20 + "\n"
-
-# 2. วิเคราะห์หุ้นรายตัว
-for ticker in ['QQQM', 'SMH']:
+    data = {
+        "content": content[:2000],
+        "username": "Engineer Wealth Bot V2.3",
+        "avatar_url": "https://cdn-icons-png.flaticon.com/512/2554/2554037.png"
+    }
     try:
-        t_data = yf.Ticker(ticker)
-        df = t_data.history(period="1y")
-        
-        latest_price = df['Close'].iloc[-1]
-        rsi = calculate_rsi(df['Close']).iloc[-1]
-        sma120 = df['Close'].rolling(window=120).mean().iloc[-1]
-        target_rsi = PORTFOLIO_HOLDINGS[ticker]['rsi_trigger']
+        requests.post(DISCORD_WEBHOOK_URL, json=data)
+    except Exception as e:
+        print(f"❌ Webhook Error: {e}")
 
-        next_div = "N/A"
+def get_portfolio_dashboard():
+    print(f"🔄 Analyzing Portfolio (Data Source: GitHub Secrets)...")
+    
+    tactical_results = []
+    trend_results = []
+    total_port_value = MY_HOLDINGS['CASH']
+    
+    for ticker in TICKERS:
         try:
-            div_history = t_data.dividends
-            if not div_history.empty: next_div = div_history.index[-1].strftime('%Y-%m-%d')
-        except: pass
+            # 1. Get Data (2 Years for MA250)
+            stock = yf.Ticker(ticker)
+            df = stock.history(period="2y")
+            
+            if df.empty: continue
+            
+            # 2. Indicators Calculation
+            df.ta.rsi(length=14, append=True)
+            df.ta.sma(length=120, append=True)
+            df.ta.sma(length=250, append=True)
+            
+            current_price = df['Close'].iloc[-1]
+            current_rsi = df['RSI_14'].iloc[-1]
+            ma120 = df['SMA_120'].iloc[-1]
+            ma250 = df['SMA_250'].iloc[-1]
+            
+            prev_price = df['Close'].iloc[-2]
+            change_pct = ((current_price - prev_price) / prev_price) * 100
+            
+            # 3. Calculate Value & P/L
+            qty = MY_HOLDINGS[ticker]['qty']
+            avg_cost = MY_HOLDINGS[ticker]['cost']
+            market_val = qty * current_price
+            total_port_value += market_val
+            
+            # 4. Tactical Signal (RSI)
+            signal = "HOLD"
+            icon = "➖"
+            if current_rsi < 35:
+                signal = "BUY"
+                icon = "🔥"
+            elif current_rsi < 45 and ticker == 'SMH':
+                signal = "WATCH"
+                icon = "👀"
+            elif current_rsi > 70:
+                signal = "WAIT"
+                icon = "⚠️"
 
-        news_text = ""
-        try:
-            news_list = t_data.news
-            if news_list and isinstance(news_list, list) and len(news_list) > 0:
-                latest_story = news_list[0]
-                title = latest_story.get('title', "")
-                if title:
-                    news_text = f"📰 News: *{title}*"
-        except: pass
+            tactical_results.append([
+                ticker,
+                f"{current_price:.2f}",
+                f"{change_pct:+.1f}%",
+                f"{current_rsi:.0f}",
+                f"{icon} {signal}"
+            ])
 
-        is_uptrend = latest_price > sma120
-        is_oversold = rsi < target_rsi 
-        
-        action_msg = ""
-        if is_uptrend and is_oversold:
-            action_msg = f"\n🚨 **BUY SIGNAL!** (RSI < {target_rsi})"
-            signals.append(ticker)
-        elif not is_uptrend:
-            action_msg = "\n⚠️ *Warning: Down Trend*"
-        
-        qty = PORTFOLIO_HOLDINGS[ticker]['qty']
-        cost = PORTFOLIO_HOLDINGS[ticker]['avg_cost']
-        current_val = latest_price * qty
-        pl_pct = ((latest_price - cost) / cost) * 100
-        total_port_value += current_val
+            # 5. Trend Signal (MA Check)
+            trend_icon = "🟢" if (not pd.isna(ma120) and current_price > ma120) else "🔴"
+            ma120_str = f"{ma120:.2f}" if not pd.isna(ma120) else "-"
+            ma250_str = f"{ma250:.2f}" if not pd.isna(ma250) else "-"
+            
+            trend_results.append([
+                f"{trend_icon} {ticker}",
+                ma120_str,
+                ma250_str
+            ])
+            
+        except Exception as e:
+            print(f"❌ Error {ticker}: {e}")
 
-        trend_icon = "🟢" if is_uptrend else "🔴"
-        
-        msg_body += f"**💎 {ticker}**\n"
-        msg_body += f"Price: `${latest_price:.2f}` ({trend_icon} UP)\n"
-        msg_body += f"RSI: `{rsi:.1f}` (Target < {target_rsi}) | Div: `{next_div}`\n"
-        msg_body += f"P/L: `{pl_pct:+.2f}%` \n"
-        msg_body += f"(Cost: `${cost:.2f}` | Qty: `{qty}`){action_msg}\n"
-        if news_text: msg_body += f"{news_text}\n"
-        msg_body += "\n"
+    # --- FORMAT OUTPUT ---
+    utc_now = datetime.datetime.utcnow()
+    thai_now = utc_now + datetime.timedelta(hours=7)
+    date_str = thai_now.strftime('%Y-%m-%d')
+    
+    msg = f"🤖 **ENGINEER WEALTH BOT V2.3**\n"
+    msg += f"📅 {date_str} (Asia/Bangkok)\n"
+    msg += f"🛡️ **Protocol:** Master Plan (70/30)\n\n"
+    
+    # Table 1: Tactical Dashboard
+    msg += "**📊 Tactical Dashboard**\n```\n"
+    msg += tabulate(tactical_results, headers=["Asset", "Price", "%", "RSI", "Signal"], tablefmt="simple")
+    msg += "\n```\n"
 
-    except Exception as e: print(f"❌ Error {ticker}: {e}")
+    # Table 2: Trend Analysis
+    msg += "**📉 Trend Analysis (MA120/250)**\n```\n"
+    msg += tabulate(trend_results, headers=["Asset", "MA120", "MA250"], tablefmt="simple")
+    msg += "\n```\n"
+    
+    msg += f"💰 **Total Wealth:** `${total_port_value:.2f}`\n"
+    msg += f"💵 **Buffer:** `${MY_HOLDINGS['CASH']:.2f}`"
 
-# 3. สร้างส่วนหัวรายงาน
-header = f"🤖 **ENGINEER BOT REPORT**\n📅 {datetime.date.today()}\n"
-if signals: header = f"🔥 **SNIPER ALERT!** 🔥\n" + header
+    send_discord_alert(msg)
 
-# แทรก Fear & Greed เข้าไปหลัง Header
-full_header = header + fg_text
-
-summary = f"💰 **Wealth:** `${total_port_value:.2f}`\n💵 **Buffer:** `${PORTFOLIO_HOLDINGS['CASH']:.2f}`"
-alert = "\n\n⚠️ **REFILL CASH** (<$100)" if PORTFOLIO_HOLDINGS['CASH'] < 100 else ""
-
-send_discord_alert(full_header + msg_body + "-"*20 + "\n" + summary + alert)
+if __name__ == "__main__":
+    get_portfolio_dashboard()
