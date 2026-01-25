@@ -1,6 +1,4 @@
-
 yfinance
 pandas
-pandas_ta
-tabulate
 requests
+numpy<2.0.0
