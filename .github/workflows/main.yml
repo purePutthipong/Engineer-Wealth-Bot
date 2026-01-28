@@ -2,8 +2,8 @@ name: Engineer Wealth Bot Auto-Run
 
 on:
   schedule:    
-    # รอบเช้าก็หนีรถติดเหมือนกัน (เปลี่ยนจาก 08:00 เป็น 08:15)
-    - cron: '15 1 * * 1-5'
+    # รอบเช้า 08:00 เวลาไทย (UTC+7)
+    - cron: '0 1 * * 1-5'
     
     # รอบดึก (21:15)
     - cron: '15 14 * * 1-5'
@@ -32,6 +32,6 @@ jobs:
           INPUT_QQQM_QTY: ${{ vars.QQQM_QTY }}
           INPUT_QQQM_COST: ${{ vars.QQQM_COST }}
           INPUT_SMH_QTY: ${{ vars.SMH_QTY }}
-          INPUT_SMH_COST: ${{ vars.SMH_COST }}
+          INPUT_SMH_COST: ${{ vars.SMH_QTY }}
           INPUT_CASH_BALANCE: ${{ vars.PORT_CASH }}
         run: python bot.py
