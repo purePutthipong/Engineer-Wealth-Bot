@@ -1,10 +1,10 @@
 name: Engineer Wealth Bot Auto-Run
 
 on:
-  schedule:    
+  schedule:
     # รอบเช้า 08:00 เวลาไทย (UTC+7)
     - cron: '0 1 * * 1-5'
-    
+
     # รอบดึก (21:15)
     - cron: '15 14 * * 1-5'
   workflow_dispatch:       # เหลือแค่นี้พอครับ (ไม่ต้องมี inputs ต่อท้าย)
@@ -32,6 +32,6 @@ jobs:
           INPUT_QQQM_QTY: ${{ vars.QQQM_QTY }}
           INPUT_QQQM_COST: ${{ vars.QQQM_COST }}
           INPUT_SMH_QTY: ${{ vars.SMH_QTY }}
-          INPUT_SMH_COST: ${{ vars.SMH_QTY }}
+          INPUT_SMH_COST: ${{ vars.SMH_COST }}
           INPUT_CASH_BALANCE: ${{ vars.PORT_CASH }}
         run: python bot.py
