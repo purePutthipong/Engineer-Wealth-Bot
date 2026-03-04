@@ -36,12 +36,11 @@ def calculate_rsi(series, period=14):
 # --- HELPER: Fear & Greed ---
 def get_market_mood():
     try:
-        url     = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
-        headers = {'User-Agent': 'Mozilla/5.0'}
-        r       = requests.get(url, headers=headers, timeout=10)
-        data    = r.json()
-        score   = int(data['fear_and_greed']['score'])
-        rating  = data['fear_and_greed']['rating']
+        url = "https://api.alternative.me/fng/?limit=1"
+        r   = requests.get(url, timeout=10)
+        data = r.json()
+        score  = int(data['data'][0]['value'])
+        rating = data['data'][0]['value_classification']
         return score, rating
     except:
         return None, None
