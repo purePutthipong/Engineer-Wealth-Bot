@@ -11,6 +11,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # ต้องให้สิทธิ์เขียน repo เพื่อ commit signal_state.json กลับ
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -28,3 +32,13 @@ jobs:
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python bot.py
+
+      # บันทึก signal_state.json กลับเข้า repo
+      # เพื่อให้รอบถัดไปเปรียบเทียบ signal ได้
+      - name: Save signal state
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add signal_state.json
+          git diff --cached --quiet || git commit -m "update signal state [skip ci]"
+          git push
