@@ -38,7 +38,7 @@ def get_market_mood():
     try:
         url     = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        r       = requests.get(url, headers=headers, timeout=5)
+        r       = requests.get(url, headers=headers, timeout=10)
         data    = r.json()
         score   = int(data['fear_and_greed']['score'])
         rating  = data['fear_and_greed']['rating']
