@@ -1,10 +1,10 @@
 {
   "QQQM": {
     "signal": "HOLD",
-    "rsi": 43.1
+    "rsi": 43.0
   },
   "SMH": {
     "signal": "WATCH",
-    "rsi": 41.6
+    "rsi": 38.6
   }
 }
