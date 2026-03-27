@@ -20,14 +20,15 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 GROQ_API_KEY        = os.environ.get('GROQ_API_KEY')
 STATE_FILE          = "signal_state.json"
 
-PORT_TICKERS  = ['QQQM', 'SMH']
-TREND_TICKERS = ['^NDX', 'QQQM', 'SMH', 'DX-Y.NYB']
+PORT_TICKERS  = ['QQQM', 'SMH', 'GC=F']
+TREND_TICKERS = ['^NDX', 'QQQM', 'SMH', 'GC=F', 'DX-Y.NYB']
 
 DISPLAY_NAME = {
     '^NDX':      'NDX100',
     'DX-Y.NYB':  'DXY',
     'QQQM':      'QQQM',
     'SMH':       'SMH',
+    'GC=F':      'GOLD',
 }
 
 # ==============================================
