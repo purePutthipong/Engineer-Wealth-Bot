@@ -287,7 +287,7 @@ def get_portfolio_dashboard():
             pct_str    = f"{pct_from_ma120:+.1f}%" if pct_from_ma120 is not None else "-"
 
             trend_rows.append(
-                f"{trend_icon} {name:<6} {current_price:>8.2f}  {ma120_str:>8}  {ma250_str:>8}  {pct_str:>7}"
+                f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8.1f} {pct_str:>7}"
             )
 
             # Volume Spike
@@ -374,7 +374,7 @@ def get_portfolio_dashboard():
     embed_color = mood_color(mood_score)
 
     tactical_header = f"{'Asset':<6} {'Price':>8} {'%Chg':>7}  {'RSI':>7}  {'BB%B':>5}  {'Score':>6}  Signal"
-    trend_header    = f"  {'Asset':<6} {'Price':>8}  {'MA120':>8}  {'MA250':>8}  vsMA120"
+    trend_header    = f"  {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
 
     tactical_block = build_code_block(tactical_rows, tactical_header)
     trend_block    = build_code_block(trend_rows, trend_header)
