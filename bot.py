@@ -287,7 +287,7 @@ def get_portfolio_dashboard():
             pct_str    = f"{pct_from_ma120:+.1f}%" if pct_from_ma120 is not None else "-"
 
             trend_rows.append(
-                f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8.1f} {pct_str:>7}"
+                f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8} {pct_str:>7}"
             )
 
             # Volume Spike
@@ -329,8 +329,8 @@ def get_portfolio_dashboard():
 
                 chg_icon = "▲" if change_pct > 0 else "▼"
                 tactical_rows.append(
-                    f"{name:<6} {current_price:>8.2f} {chg_icon}{abs(change_pct):>5.1f}%  "
-                    f"RSI:{rsi:>5.1f}  BB:{pct_b:>4.2f}  Score:{score:>5}  {icon} {display_signal}{macd_cross}"
+                    f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n"
+                    f"└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}"
                 )
 
                 # Collect for AI
@@ -373,8 +373,8 @@ def get_portfolio_dashboard():
     # ── Build Discord Embeds ──────────────────────────────────────────
     embed_color = mood_color(mood_score)
 
-    tactical_header = f"{'Asset':<6} {'Price':>8} {'%Chg':>7}  {'RSI':>7}  {'BB%B':>5}  {'Score':>6}  Signal"
-    trend_header    = f"  {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
+    tactical_header = f"{'Asset':<6} {'Price':>8} {'%Chg':>7}"
+    trend_header    = f" {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
 
     tactical_block = build_code_block(tactical_rows, tactical_header)
     trend_block    = build_code_block(trend_rows, trend_header)
