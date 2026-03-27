@@ -143,40 +143,32 @@ def generate_ai_commentary(market_data: dict) -> str:
     if not GROQ_API_KEY:
         return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
 
-    # ปรับ Prompt ให้เน้น Logic ของวิศวกรและนักวิเคราะห์
     prompt = f"""You are a Senior Quantitative Strategist. Analyze this market data:
 {json.dumps(market_data, indent=2, ensure_ascii=False)}
 
 TASK: Write a 5-bullet Discord update in a Professional Thai-English mix.
-STRUCTURE & LOGIC:
-1. 🌡️ **Market Sentiment:** Summary of Fear & Greed vs current price action.
-2. ⚔️ **Intermarket Dynamics:** Analyze how DXY trend is affecting Tech (NDX/QQQM) and Gold (GC=F). (e.g., Strong DXY = Pressure on Gold/Tech).
-3. 🎯 **Asset Specifics:** Highlight assets with extreme Signal Scores (<30 or >70). Mention RSI & BB%B context.
-4. 💰 **Gold vs Equity:** Brief view on Gold as a hedge vs Tech's momentum in the current environment.
-5. 🛡️ **Action Plan:** One clear "Engineer-style" actionable takeaway for a long-term DCA investor.
+LOGIC & CONTEXT (March 2026):
+1. 🌡️ **Sentiment:** สรุปความกลัวในตลาด (Extreme Fear) กระทบแรงซื้ออย่างไร
+2. ⚔️ **Intermarket:** วิเคราะห์ว่า DXY ที่แข็งค่า (ตอนนี้ประมาณ 100.2) กดดัน QQQM และ GOLD อย่างไร
+3. 🎯 **Signals:** เจาะจงตัวที่มี Score ต่ำกว่า 30 (เช่น QQQM/SMH ที่คุณได้มา)
+4. 💰 **Gold Context:** พูดถึงทองคำ (GC=F) ในฐานะ Safe Haven เมื่อเทียบกับความผันผวนของ Tech
+5. 🛡️ **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA ในสถานการณ์นี้
 
 GUIDELINES:
-- Use "Engineer Wealth Bot" persona: Data-driven, concise, no fluff.
-- Use emojis for readability.
-- Keep it under 250 words.
-- Mix Thai and English naturally (e.g., "DXY แข็งค่ากดดันราคาหุ้น...")."""
+- กระชับ ไม่เวิ่นเว้อ เน้นตัวเลข
+- ผสมภาษาไทย-อังกฤษแบบธรรมชาติ
+- ใช้ Emoji นำหน้าทุกข้อ"""
 
     try:
         resp = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
             json={
                 "model": "llama-3.3-70b-versatile",
-                "max_tokens": 500, # เพิ่มนิดหน่อยเพื่อความลึก
-                "temperature": 0.5, # ปรับความนิ่งของคำตอบ
+                "max_tokens": 500,
+                "temperature": 0.4, # ปรับให้นิ่งและเน้น Fact
                 "messages": [
-                    {
-                        "role": "system",
-                        "content": "You are a data-driven quant analyst. You explain 'WHY' things move based on DXY, RSI, and Market Mood.",
-                    },
+                    {"role": "system", "content": "You are a concise quant analyst who explains 'WHY' assets move based on DXY and RSI."},
                     {"role": "user", "content": prompt},
                 ],
             },
@@ -186,7 +178,6 @@ GUIDELINES:
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e:
         return f"_⚠️ AI commentary error: {e}_"
-
 
 # ==============================================
 #   STATE
