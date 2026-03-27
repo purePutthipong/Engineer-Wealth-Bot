@@ -31,6 +31,7 @@ jobs:
       - name: Run Trading Bot
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
+          GROQ_API_KEY:    ${{ secrets.GROQ_API_KEY }}
         run: python bot.py
 
       # บันทึก signal_state.json กลับเข้า repo
