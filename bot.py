@@ -215,7 +215,7 @@ def send_discord_embed(embeds: list, content: str = ""):
         return
     payload = {
         "username":   "Engineer Wealth Bot V4.0",
-        "avatar_url": "https://cdn-icons-png.flaticon.com/512/2554/2554037.png",
+        "avatar_url": "https://raw.githubusercontent.com/purePutthipong/Engineer-Wealth-Bot/main/assets/bot_avatar.png", 
         "content":    content,
         "embeds":     embeds,
     }
