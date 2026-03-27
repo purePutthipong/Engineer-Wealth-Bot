@@ -140,43 +140,42 @@ def mood_color(score):
 # ==============================================
 
 def generate_ai_commentary(market_data: dict) -> str:
-    """
-    Calls Groq API (FREE) with llama-3.3-70b to generate a concise Thai/English
-    market commentary based on collected indicators.
-    Sign up free at: https://console.groq.com
-    """
     if not GROQ_API_KEY:
-        return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary (สมัครฟรีที่ console.groq.com)_"
+        return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
 
-    prompt = f"""You are a professional quantitative analyst writing a brief Discord market update.
-
-Given the following market data:
+    # ปรับ Prompt ให้เน้น Logic ของวิศวกรและนักวิเคราะห์
+    prompt = f"""You are a Senior Quantitative Strategist. Analyze this market data:
 {json.dumps(market_data, indent=2, ensure_ascii=False)}
 
-Write a CONCISE market commentary (max 5 bullet points, mix of Thai and English is fine).
-Focus on:
-1. Overall market direction & risk level
-2. Notable signals (BUY/SELL pressure)
-3. DXY impact on tech assets
-4. One actionable takeaway for a long-term DCA investor
+TASK: Write a 5-bullet Discord update in a Professional Thai-English mix.
+STRUCTURE & LOGIC:
+1. 🌡️ **Market Sentiment:** Summary of Fear & Greed vs current price action.
+2. ⚔️ **Intermarket Dynamics:** Analyze how DXY trend is affecting Tech (NDX/QQQM) and Gold (GC=F). (e.g., Strong DXY = Pressure on Gold/Tech).
+3. 🎯 **Asset Specifics:** Highlight assets with extreme Signal Scores (<30 or >70). Mention RSI & BB%B context.
+4. 💰 **Gold vs Equity:** Brief view on Gold as a hedge vs Tech's momentum in the current environment.
+5. 🛡️ **Action Plan:** One clear "Engineer-style" actionable takeaway for a long-term DCA investor.
 
-Format each bullet with an appropriate emoji. Be direct, no fluff. Max 300 words total."""
+GUIDELINES:
+- Use "Engineer Wealth Bot" persona: Data-driven, concise, no fluff.
+- Use emojis for readability.
+- Keep it under 250 words.
+- Mix Thai and English naturally (e.g., "DXY แข็งค่ากดดันราคาหุ้น...")."""
 
     try:
         resp = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type":  "application/json",
+                "Content-Type": "application/json",
             },
             json={
-                "model":       "llama-3.3-70b-versatile",  # ฟรี, เร็ว,똑똑
-                "max_tokens":  400,
-                "temperature": 0.4,
+                "model": "llama-3.3-70b-versatile",
+                "max_tokens": 500, # เพิ่มนิดหน่อยเพื่อความลึก
+                "temperature": 0.5, # ปรับความนิ่งของคำตอบ
                 "messages": [
                     {
-                        "role":    "system",
-                        "content": "You are a concise, data-driven quantitative analyst. Write in a mix of Thai and English. Be direct and actionable.",
+                        "role": "system",
+                        "content": "You are a data-driven quant analyst. You explain 'WHY' things move based on DXY, RSI, and Market Mood.",
                     },
                     {"role": "user", "content": prompt},
                 ],
