@@ -31,7 +31,7 @@ DISPLAY_NAME = {
     'GC=F':      'GOLD',
 }
 
-# FIX 2: Futures/indices ที่ไม่มี Volume ที่เชื่อถือได้
+# Futures/indices ที่ไม่มี Volume ที่เชื่อถือได้
 NO_VOLUME_TICKERS = {'GC=F', '^NDX', 'DX-Y.NYB'}
 
 # ==============================================
@@ -280,7 +280,7 @@ def get_portfolio_dashboard():
                 f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8} {pct_str:>7}"
             )
 
-            # FIX 2: Volume Spike — ข้าม ticker ที่ไม่มี Volume จริง
+            # Volume Spike — ข้าม ticker ที่ไม่มี Volume จริง (FIX: GOLD 261x bug)
             if ticker not in NO_VOLUME_TICKERS and 'Volume' in df.columns and len(df) >= 21:
                 vol_today = df['Volume'].iloc[-1]
                 vol_avg20 = df['Volume'].iloc[-21:-1].mean()
@@ -363,14 +363,14 @@ def get_portfolio_dashboard():
     # ── Build Discord Embeds ──────────────────────────────────────────
     embed_color = mood_color(mood_score)
 
-    trend_header = f" {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
+    tactical_header = f"{'Asset':<6} {'Price':>8} {'%Chg':>7}"
+    trend_header    = f" {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
 
-    # FIX 1: tactical ใช้ plain text เพื่อให้ **bold** และ emoji render ได้ใน Discord
-    tactical_value = "\n".join(tactical_rows) if tactical_rows else "_ไม่มีข้อมูล_"
+    tactical_block = build_code_block(tactical_rows, tactical_header)
     trend_block    = build_code_block(trend_rows, trend_header)
 
     fields = [
-        {"name": "📊 Tactical Dashboard", "value": tactical_value,                    "inline": False},
+        {"name": "📊 Tactical Dashboard", "value": tactical_block,                    "inline": False},
         {"name": "📉 Trend Analysis",     "value": trend_block,                       "inline": False},
         {"name": "🤖 AI Commentary",       "value": ai_commentary or "_No data_",     "inline": False},
     ]
