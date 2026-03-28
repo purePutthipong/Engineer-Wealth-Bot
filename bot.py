@@ -7,11 +7,11 @@ import json
 import os
 
 # ==============================================
-#   Engineer Wealth Bot V5.0 (DCA Optimized)
-#   Merged Features:
-#   - Bi-Weekly Support Levels (Pivot Points)
-#   - NO_VOLUME_TICKERS Fix (GC=F, ^NDX)
-#   - AI Commentary with DCA Strategy
+#   Engineer Wealth Bot V5.0 (Full & Fixed)
+#   - DCA Strategy: Bi-Weekly Support (S1, S2)
+#   - Multi-factor Score: RSI + MACD + Bollinger
+#   - AI Analysis: Groq (Llama 3.3)
+#   - Fixed: Syntax Error & Gold Volume Bug
 # ==============================================
 
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
@@ -29,7 +29,7 @@ DISPLAY_NAME = {
     'GC=F':      'GOLD',
 }
 
-# Fix: ข้าม ticker ที่ไม่มี Volume จริง
+# ข้าม ticker ที่ไม่มีข้อมูล Volume ที่เชื่อถือได้ใน Yahoo Finance
 NO_VOLUME_TICKERS = {'GC=F', '^NDX', 'DX-Y.NYB'}
 
 # ==============================================
@@ -79,28 +79,21 @@ def interpret_signal(score):
     else: return "WAIT", "🛑"
 
 # ==============================================
-#   MARKET MOOD & AI
+#   AI COMMENTARY
 # ==============================================
 
-def get_market_mood():
-    try:
-        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
-        data = r.json()['data'][0]
-        return int(data['value']), data['value_classification']
-    except: return None, None
-
 def generate_ai_commentary(market_data: dict) -> str:
-    if not GROQ_API_KEY: return "_⚠️ ไม่มี GROQ_API_KEY_"
+    if not GROQ_API_KEY: return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
     
-    prompt = f"""You are a Senior Quantitative Strategist. Analyze this for a 2-week DCA strategy:
+    prompt = f"""You are a Senior Quantitative Strategist. Analyze this data for a 2-week DCA strategy:
 {json.dumps(market_data, indent=2, ensure_ascii=False)}
 
 TASK: Write a 5-bullet Discord update in Professional Thai-English mix.
-1. Sentiment & Mood impact.
-2. DXY vs Tech/Gold dynamics.
-3. Evaluate 'dist_to_s1' (If negative, it's a Buy the Dip opportunity).
-4. DCA advice based on 2-Week Pivot levels.
-5. Engineer-style takeaway."""
+1. Sentiment & Mood impact (Fear/Greed).
+2. DXY vs Tech and Gold dynamics.
+3. Support Analysis: Check 'dist_to_s1'. If negative, mention as a 'Buy Opportunity'.
+4. DCA advice: Based on current Signal Score and 2-week pivots.
+5. Engineer-style actionable takeaway."""
 
     try:
         resp = requests.post("https://api.groq.com/openai/v1/chat/completions",
@@ -108,14 +101,17 @@ TASK: Write a 5-bullet Discord update in Professional Thai-English mix.
             json={
                 "model": "llama-3.3-70b-versatile",
                 "max_tokens": 500, "temperature": 0.4,
-                "messages": [{"role": "system", "content": "You are a quant analyst. Analyze price relative to 2-week support targets."},
-                             {"role": "user", "content": prompt}]
+                "messages": [
+                    {"role": "system", "content": "You are a quant strategist. Explain why assets move relative to DXY and 2-week support targets."},
+                    {"role": "user", "content": prompt}
+                ]
             }, timeout=30)
+        resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
     except Exception as e: return f"_⚠️ AI commentary error: {e}_"
 
 # ==============================================
-#   MAIN DASHBOARD
+#   MAIN ENGINE
 # ==============================================
 
 def get_portfolio_dashboard():
@@ -123,9 +119,16 @@ def get_portfolio_dashboard():
     date_str, time_str = thai_now.strftime('%d %b %Y'), thai_now.strftime('%H:%M')
     is_friday = thai_now.weekday() == 4
 
-    mood_score, mood_rating = get_market_mood()
-    prev_state = {} # Load state logic can be added here
-    new_state, tactical_rows, trend_rows, volume_alerts, weekly_rows = {}, [], [], [], []
+    # Fetch Market Mood
+    try:
+        r = requests.get("https://api.alternative.me/fng/?limit=1", timeout=10)
+        mood_data = r.json()['data'][0]
+        mood_score = int(mood_data['value'])
+        mood_rating = mood_data['value_classification']
+    except:
+        mood_score, mood_rating = None, "N/A"
+
+    tactical_rows, trend_rows, volume_alerts, weekly_rows = [], [], [], []
     market_data_for_ai = {"date": date_str, "mood_score": mood_score, "assets": []}
 
     for ticker in TREND_TICKERS:
@@ -135,76 +138,80 @@ def get_portfolio_dashboard():
             if df.empty: continue
 
             name = DISPLAY_NAME.get(ticker, ticker)
-            current_price = df['Close'].iloc[-1]
-            prev_price = df['Close'].iloc[-2]
-            change_pct = (current_price - prev_price) / prev_price * 100
+            curr = df['Close'].iloc[-1]
+            prev = df['Close'].iloc[-2]
+            change_pct = (curr - prev) / prev * 100
 
-            # Trend
+            # Trend Analysis
             ma120 = df['Close'].rolling(120).mean().iloc[-1]
-            trend_icon = "🟢" if (not pd.isna(ma120) and current_price > ma120) else "🔴"
-            ma120_str = f"{ma120:.1f}" if not pd.isna(ma120) else "-"
-            pct_str = f"{(current_price - ma120)/ma120*100:+.1f}%" if not pd.isna(ma120) else "-"
-            trend_rows.append(f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8} {pct_str:>7}")
+            trend_icon = "🟢" if curr > ma120 else "🔴"
+            vs120_pct = (curr - ma120) / ma120 * 100 if not pd.isna(ma120) else 0
+            trend_rows.append(f"{trend_icon} {name:<5} {curr:>8.1f} {ma120:>8.1f} {vs120_pct:>7.1f}%")
 
-            # FIX: Volume Spike (Using NO_VOLUME_TICKERS)
+            # Volume Spike (Skip NO_VOLUME_TICKERS)
             if ticker not in NO_VOLUME_TICKERS and 'Volume' in df.columns and len(df) >= 21:
-                vol_today, vol_avg20 = df['Volume'].iloc[-1], df['Volume'].iloc[-21:-1].mean()
-                if vol_avg20 > 0 and vol_today > vol_avg20 * 1.5:
-                    volume_alerts.append(f"⚡ **{name}** Vol spike `{vol_today/vol_avg20:.1f}x`")
+                v_today, v_avg = df['Volume'].iloc[-1], df['Volume'].iloc[-21:-1].mean()
+                if v_avg > 0 and v_today > v_avg * 1.5:
+                    volume_alerts.append(f"⚡ **{name}** Vol spike `{v_today/v_avg:.1f}x`")
 
-            # Tactical & 2-Week Support
+            # Tactical & 2-Week Support (Portfolio only)
             if ticker in PORT_TICKERS:
                 rsi = calculate_rsi(df['Close']).iloc[-1]
                 _, _, mh_series = calculate_macd(df['Close'])
-                macd_std = mh_series.tail(30).std()
                 _, _, pb_series = calculate_bollinger(df['Close'])
-                score = compute_signal_score(rsi, mh_series.iloc[-1], pb_series.iloc[-1], macd_std)
+                score = compute_signal_score(rsi, mh_series.iloc[-1], pb_series.iloc[-1], mh_series.tail(30).std())
                 signal, icon = interpret_signal(score)
 
-                # --- Bi-Weekly Support Calculation ---
+                # Bi-Weekly Support Calculation
                 df_2w = df.resample('2W-SUN').agg({'High':'max', 'Low':'min', 'Close':'last'})
-                w2_prev = df_2w.iloc[-2]
-                w2_p = (w2_prev['High'] + w2_prev['Low'] + w2_prev['Close']) / 3
-                w2_s1 = (w2_p * 2) - w2_prev['High']
-                w2_s2 = w2_p - (w2_prev['High'] - w2_prev['Low'])
-                dist_s1 = (current_price - w2_s1) / w2_s1 * 100
+                w2 = df_2w.iloc[-2] # แท่ง 2 สัปดาห์ก่อนหน้าที่จบสมบูรณ์แล้ว
+                pivot = (w2['High'] + w2['Low'] + w2['Close']) / 3
+                s1, s2 = (pivot * 2) - w2['High'], pivot - (w2['High'] - w2['Low'])
+                dist_s1 = (curr - s1) / s1 * 100
 
-                chg_icon = "▲" if change_pct > 0 else "▼"
                 tactical_rows.append(
-                    f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n"
+                    f"**{name}** {curr:>8.2f} {'▲' if change_pct > 0 else '▼'}{abs(change_pct):>4.1f}%\n"
                     f"└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {signal}\n"
-                    f"  🛡️ **2-Week Sup:** S1:{w2_s1:.2f} ({dist_s1:+.1f}%) | S2:{w2_s2:.2f}"
+                    f"  🛡️ **2-Week Sup:** S1:{s1:.2f} ({dist_s1:+.1f}%) | S2:{s2:.2f}"
                 )
 
                 market_data_for_ai["assets"].append({
-                    "ticker": name, "price": round(current_price, 2), "score": score,
-                    "bi_weekly_s1": round(w2_s1, 2), "dist_to_s1": round(dist_s1, 1)
+                    "ticker": name, "price": round(curr, 2), "score": score,
+                    "s1": round(s1, 2), "dist_to_s1": round(dist_s1, 1)
                 })
 
             if ticker == 'DX-Y.NYB':
-                market_data_for_ai["dxy"] = {"price": round(current_price, 2), "trend": "up" if current_price > ma120 else "down"}
+                market_data_for_ai["dxy"] = {"price": round(curr, 2), "trend": "up" if curr > ma120 else "down"}
 
-        except Exception as e: print(f"❌ Error {ticker}: {e}")
+        except Exception as e:
+            print(f"❌ Error {ticker}: {e}")
 
+    # AI Commentary Generation
     ai_commentary = generate_ai_commentary(market_data_for_ai)
+
+    # UI Construction
+    trend_header = f" Asset   Price    MA120    vs120"
+    trend_block  = f"```\n{trend_header}\n{'─' * len(trend_header)}\n" + "\n".join(trend_rows) + "\n```"
     
-    # Discord Embed Logic
     embed = {
         "title": "⚙️ ENGINEER WEALTH BOT V5.0",
-        "description": f"📅 **{date_str}** `{time_str} ICT` | 🌡️ Mood: `{mood_score or 'N/A'}/100`",
+        "description": f"📅 **{date_str}** `{time_str} ICT` | 🌡️ Mood: `{mood_score}/100`",
         "color": 0x2196F3 if (mood_score or 50) < 30 else 0xFFEB3B if (mood_score or 50) < 60 else 0xF44336,
         "fields": [
-            {"name": "📊 Tactical Dashboard (2-Week Targets)", "value": "\n".join(tactical_rows), "inline": False},
-            {"name": "📉 Trend Analysis", "value": "
-http://googleusercontent.com/immersive_entry_chip/0
+            {"name": "📊 Tactical Dashboard (2-Week Targets)", "value": "\n".join(tactical_rows) if tactical_rows else "N/A", "inline": False},
+            {"name": "📉 Trend Analysis", "value": trend_block, "inline": False},
+            {"name": "🤖 AI Commentary", "value": ai_commentary, "inline": False},
+        ],
+        "footer": {"text": "DCA Strategy • Pivot Points: Bi-Weekly Basis"},
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    }
 
----
+    if volume_alerts:
+        embed["fields"].insert(2, {"name": "⚡ Volume Spike", "value": "\n".join(volume_alerts), "inline": False})
 
-### 💡 จุดที่บอทฉลาดขึ้นหลังรวมโค้ด:
-1. **DCA Discipline:** บรรทัด `🛡️ 2-Week Sup` จะบอกตัวเลขที่คุณต้องใช้ตั้ง Order ใน Dime! ทันที (เช่น S1: 230.15) ซึ่งตัวเลขนี้จะ **ไม่เปลี่ยน** แม้ราคาจะแกว่งรายวัน ทำให้คุณมีวินัยในการ DCA มากขึ้น
-2. **Gold Spike Fix:** รักษา Logic `NO_VOLUME_TICKERS` ของคุณไว้ ทำให้การแจ้งเตือน Volume Spike ของทองคำและ DXY ไม่มารบกวนจนน่ารำคาญ
-3. **AI Synergy:** AI จะสรุปให้คุณฟังว่าราคาวันนี้ "แพง" หรือ "ถูก" เมื่อเทียบกับแผน 2 สัปดาห์ที่คุณวางไว้
+    # Send to Discord
+    requests.post(DISCORD_WEBHOOK_URL, json={"username": "Engineer Wealth Bot V5.0", "embeds": [embed]}, timeout=15)
+    print("✅ Dashboard Sent to Discord!")
 
-**ยินดีด้วยกับ V5.0 ครับ!** เมื่อคุณรันโค้ดนี้ พรุ่งนี้เช้าบอทจะส่ง "ไม้บรรทัดวัดราคา" ชุดใหม่มาให้คุณบน S24 FE ทันที
-
-**อยากให้ผมช่วยเขียนคำสั่ง "Cron Job" สำหรับรันบอทตัวนี้แบบอัตโนมัติบน GitHub Actions ทุกเช้าเลยไหมครับ?** บอทจะได้ส่งข้อความหาคุณทุกวันโดยที่คุณไม่ต้องกดรันเองเลยครับ!
+if __name__ == "__main__":
+    get_portfolio_dashboard()
