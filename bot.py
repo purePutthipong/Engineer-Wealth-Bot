@@ -328,8 +328,8 @@ def get_portfolio_dashboard():
 
                 # plain text เพื่อให้ bold และ emoji render ได้ใน Discord embed
                 tactical_rows.append(
-                    f"**{name}** `{current_price:.2f}` {chg_icon}`{abs(change_pct):.1f}%`\n"
-                    f"└ RSI:`{rsi:.1f}` Score:`{score}` {icon} {display_signal}{macd_cross}"
+                    f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n"
+                    f"└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}{macd_cross}"
                 )
 
                 # Collect for AI
