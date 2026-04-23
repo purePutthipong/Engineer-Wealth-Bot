@@ -1,17 +1,17 @@
 {
   "QQQM": {
     "signal": "WAIT",
-    "rsi": 73.6,
-    "score": 86.2
+    "rsi": 74.2,
+    "score": 86.8
   },
   "SMH": {
     "signal": "WAIT",
-    "rsi": 77.6,
-    "score": 87.5
+    "rsi": 78.5,
+    "score": 88.4
   },
   "GC=F": {
     "signal": "HOLD",
-    "rsi": 49.1,
-    "score": 59.1
+    "rsi": 47.3,
+    "score": 53.9
   }
 }
