@@ -20,8 +20,8 @@ DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
 GROQ_API_KEY        = os.environ.get('GROQ_API_KEY')
 STATE_FILE          = "signal_state.json"
 
-PORT_TICKERS  = ['QQQM', 'SMH', 'GC=F']
-TREND_TICKERS = ['^NDX', 'QQQM', 'SMH', 'GC=F', 'DX-Y.NYB']
+PORT_TICKERS  = ['QQQM', 'SMH', 'GC=F', 'PLTR', 'ARM']
+TREND_TICKERS = ['^NDX', 'QQQM', 'SMH', 'GC=F', 'DX-Y.NYB', 'PLTR', 'ARM']
 
 DISPLAY_NAME = {
     '^NDX':      'NDX100',
@@ -29,10 +29,18 @@ DISPLAY_NAME = {
     'QQQM':      'QQQM',
     'SMH':       'SMH',
     'GC=F':      'GOLD',
+    'PLTR':      'PLTR',
+    'ARM':       'ARM',
 }
 
 # Futures/indices ที่ไม่มี Volume ที่เชื่อถือได้
 NO_VOLUME_TICKERS = {'GC=F', '^NDX', 'DX-Y.NYB'}
+
+# Growth Portfolio — Rotate targets (ตั้ง 2026-04-26)
+ROTATE_TARGETS = {
+    'PLTR': {'target': 220.92, 'stop': None,   'cost': 147.282},
+    'ARM':  {'target': 262.58, 'stop': 205.00, 'cost': 175.056},
+}
 
 # ==============================================
 #   INDICATORS
@@ -142,14 +150,18 @@ def generate_ai_commentary(market_data: dict) -> str:
     if not GROQ_API_KEY:
         return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
 
+    dxy_price  = market_data.get('dxy', {}).get('price', 'N/A')
+    dxy_trend  = market_data.get('dxy', {}).get('trend', 'N/A')
+    month_year = market_data.get('date', '')
+
     prompt = f"""You are a Senior Quantitative Strategist. Analyze this market data:
 {json.dumps(market_data, indent=2, ensure_ascii=False)}
 
 TASK: Write a 5-bullet Discord update in a Professional Thai-English mix.
-LOGIC & CONTEXT (March 2026):
-1. 🌡️ **Sentiment:** สรุปความกลัวในตลาด (Extreme Fear) กระทบแรงซื้ออย่างไร
-2. ⚔️ **Intermarket:** วิเคราะห์ว่า DXY ที่แข็งค่า (ตอนนี้ประมาณ 100.2) กดดัน QQQM และ GOLD อย่างไร
-3. 🎯 **Signals:** เจาะจงตัวที่มี Score ต่ำกว่า 30 (เช่น QQQM/SMH ที่คุณได้มา)
+LOGIC & CONTEXT ({month_year}):
+1. 🌡️ **Sentiment:** สรุป Fear & Greed ({market_data.get('mood_score', 'N/A')}/100) กระทบแรงซื้ออย่างไร
+2. ⚔️ **Intermarket:** DXY อยู่ที่ {dxy_price} (trend: {dxy_trend}) กดดัน QQQM และ GOLD อย่างไร
+3. 🎯 **Signals:** เจาะจงตัวที่มี Signal น่าสนใจจาก data ที่ได้มา
 4. 💰 **Gold Context:** พูดถึงทองคำ (GC=F) ในฐานะ Safe Haven เมื่อเทียบกับความผันผวนของ Tech
 5. 🛡️ **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA ในสถานการณ์นี้
 
@@ -246,6 +258,7 @@ def get_portfolio_dashboard():
     trend_rows    = []
     volume_alerts = []
     weekly_rows   = []
+    rotate_alerts = []
     market_data_for_ai = {
         "date":        date_str,
         "mood_score":  mood_score,
@@ -343,6 +356,19 @@ def get_portfolio_dashboard():
                         f"{name:<6} Score:{score:>5}  RSI:{rsi:>5.1f}({rsi_change})  {icon} {signal}"
                     )
 
+            # Rotate Alert — ตรวจ Growth Portfolio
+            if ticker in ROTATE_TARGETS:
+                rt = ROTATE_TARGETS[ticker]
+                gain_pct = (current_price - rt['cost']) / rt['cost'] * 100
+                if current_price >= rt['target']:
+                    rotate_alerts.append(
+                        f"🚀 **{name}** ถึงเป้า Rotate! `${current_price:.2f}` ≥ `${rt['target']}` (+{gain_pct:.1f}%) — พิจารณาขาย"
+                    )
+                elif rt['stop'] and current_price <= rt['stop']:
+                    rotate_alerts.append(
+                        f"🛑 **{name}** หลุด Stop-Loss! `${current_price:.2f}` ≤ `${rt['stop']}` ({gain_pct:.1f}%) — พิจารณาขาย"
+                    )
+
             # Collect DXY for AI
             if ticker == 'DX-Y.NYB':
                 market_data_for_ai["dxy"] = {
@@ -374,6 +400,13 @@ def get_portfolio_dashboard():
         {"name": "📉 Trend Analysis",     "value": trend_block,                       "inline": False},
         {"name": "🤖 AI Commentary",       "value": ai_commentary or "_No data_",     "inline": False},
     ]
+
+    if rotate_alerts:
+        fields.append({
+            "name":   "🔄 Rotate Alert",
+            "value":  "\n".join(rotate_alerts),
+            "inline": False,
+        })
 
     if volume_alerts:
         fields.append({
