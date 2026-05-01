@@ -1,27 +1,27 @@
 {
   "QQQM": {
     "signal": "WAIT",
-    "rsi": 73.0,
-    "score": 80.5
+    "rsi": 75.1,
+    "score": 82.0
   },
   "SMH": {
     "signal": "WAIT",
-    "rsi": 76.3,
-    "score": 86.5
+    "rsi": 76.6,
+    "score": 86.1
   },
   "GC=F": {
     "signal": "BUY",
-    "rsi": 44.2,
-    "score": 36.4
+    "rsi": 44.9,
+    "score": 37.5
   },
   "PLTR": {
-    "signal": "WATCH",
-    "rsi": 45.2,
-    "score": 43.3
+    "signal": "HOLD",
+    "rsi": 50.2,
+    "score": 53.7
   },
   "ARM": {
     "signal": "WAIT",
-    "rsi": 66.5,
-    "score": 82.0
+    "rsi": 67.4,
+    "score": 82.2
   }
 }
