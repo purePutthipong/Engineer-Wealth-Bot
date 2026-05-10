@@ -146,11 +146,11 @@ def generate_ai_commentary(market_data: dict) -> str:
 
 TASK: Write a 5-bullet Discord update in a Professional Thai-English mix.
 LOGIC & CONTEXT ({month_year}):
-1. 🌡️ **Sentiment:** สรุป Fear & Greed ({market_data.get('mood_score', 'N/A')}/100)
-2. ⚔️ **Intermarket:** DXY {dxy_price} (trend: {dxy_trend}) กดดัน QQQM/GOLD อย่างไร
-3. 🎯 **Signals:** เจาะจงตัวที่มี Signal น่าสนใจ
-4. 💰 **Gold Context:** GC=F ในฐานะ Safe Haven
-5. 🛡️ **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA
+1. **Sentiment:** สรุป Fear & Greed ({market_data.get('mood_score', 'N/A')}/100)
+2. **Intermarket:** DXY {dxy_price} (trend: {dxy_trend}) กดดัน QQQM/GOLD อย่างไร
+3. **Signals:** เจาะจงตัวที่มี Signal น่าสนใจ
+4. **Gold Context:** GC=F ในฐานะ Safe Haven
+5. **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA
 
 GUIDELINES: กระชับ เน้นตัวเลข ผสมไทย-อังกฤษ ใช้ Emoji นำหน้าทุกข้อ"""
 
