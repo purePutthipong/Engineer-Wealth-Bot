@@ -7,13 +7,12 @@ import json
 import os
 
 # ==============================================
-#   Engineer Wealth Bot V4.0
-#   New in V4:
-#   - AI-Generated Market Commentary (Groq - FREE)
-#   - Multi-factor Signal (RSI + MACD + Bollinger Band)
-#   - Signal Strength Score (0-100)
-#   - Discord Embeds (color-coded by mood)
-#   - Retry logic & robust error handling
+#   Engineer Wealth Bot V5.0
+#   New in V5:
+#   - Dynamic Risk Level Scoring (RSI + F&G)
+#   - Automated Trailing Stop (20-day Low / BB Lower)
+#   - Bug Fix: Dynamic AI Date injection
+#   - Enhanced Discord UI with Risk Metrics
 # ==============================================
 
 DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
@@ -43,7 +42,7 @@ ROTATE_TARGETS = {
 }
 
 # ==============================================
-#   INDICATORS
+#   INDICATORS & RISK LOGIC
 # ==============================================
 
 def calculate_rsi(series, period=14):
@@ -55,7 +54,6 @@ def calculate_rsi(series, period=14):
     rs = avg_gain / avg_loss
     return 100 - (100 / (1 + rs))
 
-
 def calculate_macd(series, fast=12, slow=26, signal=9):
     ema_fast   = series.ewm(span=fast, adjust=False).mean()
     ema_slow   = series.ewm(span=slow, adjust=False).mean()
@@ -64,49 +62,45 @@ def calculate_macd(series, fast=12, slow=26, signal=9):
     histogram  = macd_line - signal_line
     return macd_line, signal_line, histogram
 
-
 def calculate_bollinger(series, period=20, std_dev=2):
     ma     = series.rolling(window=period).mean()
     std    = series.rolling(window=period).std()
     upper  = ma + std_dev * std
     lower  = ma - std_dev * std
-    pct_b  = (series - lower) / (upper - lower)  # 0=lower band, 1=upper band
+    pct_b  = (series - lower) / (upper - lower)
     return upper, lower, pct_b
 
+def calculate_trailing_stop(df):
+    """V5: Max of 20-day Low or Bollinger Lower Band."""
+    low_20 = df['Low'].rolling(window=20).min().iloc[-1]
+    _, bb_lower, _ = calculate_bollinger(df['Close'])
+    return max(low_20, bb_lower.iloc[-1])
+
+def calculate_risk_level(avg_rsi, mood_score):
+    """V5: Weighted risk score (RSI 60%, Mood 40%)."""
+    if avg_rsi is None or mood_score is None: return "UNKNOWN", "⚪"
+    risk_score = (avg_rsi - 50) * 0.6 + (mood_score - 50) * 0.4
+    if risk_score > 25:  return "HIGH RISK", "🔴"
+    if risk_score > 5:   return "MODERATE", "🟠"
+    if risk_score > -15: return "NEUTRAL",  "🟡"
+    return "LOW RISK", "🟢"
 
 def compute_signal_score(rsi, macd_hist, pct_b, macd_std=5.0):
-    """
-    Multi-factor signal score: 0–100
-    Lower = stronger BUY, Higher = stronger SELL/WAIT
-    Weighted: RSI 40%, MACD 35%, Bollinger %B 25%
-    """
     rsi_score = np.clip(rsi, 0, 100)
-
     divisor = macd_std if (macd_std and macd_std > 0) else 5.0
     macd_norm = np.clip(macd_hist / divisor, -1, 1)
     macd_score = (macd_norm + 1) / 2 * 100
-
     bb_score = np.clip(pct_b * 100, 0, 100)
-
     composite = 0.40 * rsi_score + 0.35 * macd_score + 0.25 * bb_score
     return round(composite, 1)
 
-
 def interpret_signal(score, ticker=None):
-    """Map composite score to trading signal + icon."""
-    if score < 28:
-        return "STRONG BUY", "🔥🔥"
-    elif score < 38:
-        return "BUY",        "🔥"
-    elif score < 48:
-        return "WATCH",      "👀"
-    elif score < 62:
-        return "HOLD",       "➖"
-    elif score < 75:
-        return "REDUCE",     "⚠️"
-    else:
-        return "WAIT",       "🛑"
-
+    if score < 28: return "STRONG BUY", "🔥🔥"
+    if score < 38: return "BUY", "🔥"
+    if score < 48: return "WATCH", "👀"
+    if score < 62: return "HOLD", "➖"
+    if score < 75: return "REDUCE", "⚠️"
+    return "WAIT", "🛑"
 
 # ==============================================
 #   MARKET MOOD
@@ -119,56 +113,46 @@ def get_market_mood():
         score  = int(data['value'])
         rating = data['value_classification']
         return score, rating
-    except Exception:
-        return None, None
-
+    except Exception: return None, None
 
 def mood_emoji(score):
-    if score is None:    return "❓"
-    if score < 20:       return "😱"
-    if score < 40:       return "😨"
-    if score < 60:       return "😐"
-    if score < 80:       return "😏"
+    if score is None: return "❓"
+    if score < 20: return "😱"
+    if score < 40: return "😨"
+    if score < 60: return "😐"
+    if score < 80: return "😏"
     return "🤑"
 
-
 def mood_color(score):
-    """Discord embed color based on market mood (decimal int)."""
-    if score is None:    return 0x888888
-    if score < 30:       return 0x2196F3   # blue  (extreme fear)
-    if score < 45:       return 0x9C27B0   # purple (fear)
-    if score < 55:       return 0xFFEB3B   # yellow (neutral)
-    if score < 70:       return 0xFF9800   # orange (greed)
-    return 0xF44336                         # red    (extreme greed)
-
+    if score is None: return 0x888888
+    if score < 30: return 0x2196F3
+    if score < 45: return 0x9C27B0
+    if score < 55: return 0xFFEB3B
+    if score < 70: return 0xFF9800
+    return 0xF44336
 
 # ==============================================
 #   AI COMMENTARY (Groq - FREE)
 # ==============================================
 
 def generate_ai_commentary(market_data: dict) -> str:
-    if not GROQ_API_KEY:
-        return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
-
+    if not GROQ_API_KEY: return "_⚠️ ไม่มี GROQ_API_KEY — ข้าม AI commentary_"
     dxy_price  = market_data.get('dxy', {}).get('price', 'N/A')
     dxy_trend  = market_data.get('dxy', {}).get('trend', 'N/A')
-    month_year = market_data.get('date', '')
+    month_year = market_data.get('month_year', 'Current Market')
 
     prompt = f"""You are a Senior Quantitative Strategist. Analyze this market data:
 {json.dumps(market_data, indent=2, ensure_ascii=False)}
 
 TASK: Write a 5-bullet Discord update in a Professional Thai-English mix.
 LOGIC & CONTEXT ({month_year}):
-1. 🌡️ **Sentiment:** สรุป Fear & Greed ({market_data.get('mood_score', 'N/A')}/100) กระทบแรงซื้ออย่างไร
-2. ⚔️ **Intermarket:** DXY อยู่ที่ {dxy_price} (trend: {dxy_trend}) กดดัน QQQM และ GOLD อย่างไร
-3. 🎯 **Signals:** เจาะจงตัวที่มี Signal น่าสนใจจาก data ที่ได้มา
-4. 💰 **Gold Context:** พูดถึงทองคำ (GC=F) ในฐานะ Safe Haven เมื่อเทียบกับความผันผวนของ Tech
-5. 🛡️ **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA ในสถานการณ์นี้
+1. 🌡️ **Sentiment:** สรุป Fear & Greed ({market_data.get('mood_score', 'N/A')}/100)
+2. ⚔️ **Intermarket:** DXY {dxy_price} (trend: {dxy_trend}) กดดัน QQQM/GOLD อย่างไร
+3. 🎯 **Signals:** เจาะจงตัวที่มี Signal น่าสนใจ
+4. 💰 **Gold Context:** GC=F ในฐานะ Safe Haven
+5. 🛡️ **Action Plan:** คำแนะนำแบบ Engineer สำหรับชาว DCA
 
-GUIDELINES:
-- กระชับ ไม่เวิ่นเว้อ เน้นตัวเลข
-- ผสมภาษาไทย-อังกฤษแบบธรรมชาติ
-- ใช้ Emoji นำหน้าทุกข้อ"""
+GUIDELINES: กระชับ เน้นตัวเลข ผสมไทย-อังกฤษ ใช้ Emoji นำหน้าทุกข้อ"""
 
     try:
         resp = requests.post(
@@ -176,10 +160,9 @@ GUIDELINES:
             headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
             json={
                 "model": "llama-3.3-70b-versatile",
-                "max_tokens": 500,
-                "temperature": 0.4,
+                "max_tokens": 500, "temperature": 0.4,
                 "messages": [
-                    {"role": "system", "content": "You are a concise quant analyst who explains 'WHY' assets move based on DXY and RSI."},
+                    {"role": "system", "content": "You are a quant analyst explaining 'WHY' assets move based on DXY and RSI."},
                     {"role": "user", "content": prompt},
                 ],
             },
@@ -187,51 +170,34 @@ GUIDELINES:
         )
         resp.raise_for_status()
         return resp.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        return f"_⚠️ AI commentary error: {e}_"
+    except Exception as e: return f"_⚠️ AI commentary error: {e}_"
 
 # ==============================================
-#   STATE
+#   STATE & DISCORD
 # ==============================================
 
 def load_state():
     if os.path.exists(STATE_FILE):
-        with open(STATE_FILE, 'r') as f:
-            return json.load(f)
+        with open(STATE_FILE, 'r') as f: return json.load(f)
     return {}
 
-
 def save_state(state):
-    with open(STATE_FILE, 'w') as f:
-        json.dump(state, f, indent=2)
-
-
-# ==============================================
-#   DISCORD
-# ==============================================
+    with open(STATE_FILE, 'w') as f: json.dump(state, f, indent=2)
 
 def send_discord_embed(embeds: list, content: str = ""):
-    """Send Discord message with embed objects (rich cards)."""
-    if not DISCORD_WEBHOOK_URL:
-        print("⚠️ No DISCORD_WEBHOOK set")
-        return
+    if not DISCORD_WEBHOOK_URL: return
     payload = {
-        "username":   "Engineer Wealth Bot V4.0",
+        "username": "Engineer Wealth Bot V5.0",
         "avatar_url": "https://raw.githubusercontent.com/purePutthipong/Engineer-Wealth-Bot/main/assets/bot_avatar.png",
-        "content":    content,
-        "embeds":     embeds,
+        "content": content, "embeds": embeds,
     }
     try:
         r = requests.post(DISCORD_WEBHOOK_URL, json=payload, timeout=15)
         r.raise_for_status()
-        print("✅ Discord embed sent!")
-    except Exception as e:
-        print(f"❌ Discord error: {e}")
-
+    except Exception as e: print(f"❌ Discord error: {e}")
 
 def build_code_block(rows: list, header: str) -> str:
     return f"```\n{header}\n{'─' * len(header)}\n" + "\n".join(rows) + "\n```"
-
 
 # ==============================================
 #   MAIN
@@ -240,17 +206,13 @@ def build_code_block(rows: list, header: str) -> str:
 def get_portfolio_dashboard():
     thai_now  = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
     date_str  = thai_now.strftime('%d %b %Y')
+    month_year = thai_now.strftime('%B %Y')
     time_str  = thai_now.strftime('%H:%M')
     is_friday = thai_now.weekday() == 4
 
-    print(f"🔄 Running... {date_str} {time_str} (Friday={is_friday})")
-
-    # ── Market Mood ───────────────────────────────────────────────────
     mood_score, mood_rating = get_market_mood()
-    mood_icon = mood_emoji(mood_score)
-    mood_display = f"{mood_score}/100  {mood_icon}  {mood_rating}" if mood_score else "N/A"
+    mood_display = f"{mood_score}/100 {mood_emoji(mood_score)} {mood_rating}" if mood_score else "N/A"
 
-    # ── Load State ────────────────────────────────────────────────────
     prev_state = load_state()
     new_state  = {}
 
@@ -259,186 +221,92 @@ def get_portfolio_dashboard():
     volume_alerts = []
     weekly_rows   = []
     rotate_alerts = []
-    market_data_for_ai = {
-        "date":        date_str,
-        "mood_score":  mood_score,
-        "mood_rating": mood_rating,
-        "assets":      [],
-    }
+    rsi_values    = []
+    market_data_for_ai = {"date": date_str, "month_year": month_year, "mood_score": mood_score, "mood_rating": mood_rating, "assets": []}
 
     for ticker in TREND_TICKERS:
         try:
             stock = yf.Ticker(ticker)
             df    = stock.history(period="2y")
-            if df.empty:
-                print(f"⚠️ No data: {ticker}")
-                continue
+            if df.empty: continue
 
-            name          = DISPLAY_NAME.get(ticker, ticker)
+            name = DISPLAY_NAME.get(ticker, ticker)
             current_price = df['Close'].iloc[-1]
-            prev_price    = df['Close'].iloc[-2]
-            change_pct    = (current_price - prev_price) / prev_price * 100
+            prev_price = df['Close'].iloc[-2]
+            change_pct = (current_price - prev_price) / prev_price * 100
 
-            # MAs
             ma120 = df['Close'].rolling(120).mean().iloc[-1]
-            ma250 = df['Close'].rolling(250).mean().iloc[-1]
-            pct_from_ma120 = (current_price - ma120) / ma120 * 100 if not pd.isna(ma120) else None
-
+            pct_str = f"{(current_price - ma120) / ma120 * 100:+.1f}%" if not pd.isna(ma120) else "-"
             trend_icon = "🟢" if (not pd.isna(ma120) and current_price > ma120) else "🔴"
-            ma120_str  = f"{ma120:.2f}"         if not pd.isna(ma120) else "-"
-            ma250_str  = f"{ma250:.2f}"         if not pd.isna(ma250) else "-"
-            pct_str    = f"{pct_from_ma120:+.1f}%" if pct_from_ma120 is not None else "-"
 
-            trend_rows.append(
-                f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120_str:>8} {pct_str:>7}"
-            )
+            trend_rows.append(f"{trend_icon} {name:<5} {current_price:>8.1f} {ma120:>8.2f} {pct_str:>7}")
 
-            # Volume Spike — ข้าม ticker ที่ไม่มี Volume จริง (FIX: GOLD 261x bug)
             if ticker not in NO_VOLUME_TICKERS and 'Volume' in df.columns and len(df) >= 21:
                 vol_today = df['Volume'].iloc[-1]
                 vol_avg20 = df['Volume'].iloc[-21:-1].mean()
                 if vol_avg20 > 0 and vol_today > vol_avg20 * 1.5:
-                    spike_x = vol_today / vol_avg20
-                    volume_alerts.append(f"⚡ **{name}** Volume spike `{spike_x:.1f}x` avg20")
+                    volume_alerts.append(f"⚡ **{name}** Volume spike `{vol_today/vol_avg20:.1f}x` avg20")
 
-            # Tactical + Signals (PORT_TICKERS only)
             if ticker in PORT_TICKERS:
                 rsi = calculate_rsi(df['Close']).iloc[-1]
-
+                rsi_values.append(rsi)
                 _, _, macd_hist_series = calculate_macd(df['Close'])
                 macd_hist = macd_hist_series.iloc[-1]
-                macd_prev = macd_hist_series.iloc[-2]
-                macd_std = macd_hist_series.tail(30).std()
-                macd_cross = "↑" if (macd_hist > 0 and macd_prev <= 0) else \
-                             "↓" if (macd_hist < 0 and macd_prev >= 0) else ""
-
                 _, _, pct_b_series = calculate_bollinger(df['Close'])
                 pct_b = pct_b_series.iloc[-1]
+                score = compute_signal_score(rsi, macd_hist, pct_b, macd_hist_series.tail(30).std())
+                signal, icon = interpret_signal(score)
 
-                score         = compute_signal_score(rsi, macd_hist, pct_b, macd_std)
-                signal, icon  = interpret_signal(score)
-
-                # Signal change detection
                 prev_signal = prev_state.get(ticker, {}).get('signal', None)
-                new_state[ticker] = {
-                    'signal': signal,
-                    'rsi':    round(rsi, 1),
-                    'score':  score,
-                }
+                new_state[ticker] = {'signal': signal, 'rsi': round(rsi, 1), 'score': score}
 
-                display_signal = signal
-                if prev_signal and prev_signal != signal:
-                    display_signal = f"{prev_signal}→{signal}"
-
+                display_signal = f"{prev_signal}→{signal}" if prev_signal and prev_signal != signal else signal
                 chg_icon = "▲" if change_pct > 0 else "▼"
-                tactical_rows.append(
-                    f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n"
-                    f"└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}"
-                )
+                tactical_rows.append(f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}")
 
-                # Collect for AI
-                market_data_for_ai["assets"].append({
-                    "ticker":       name,
-                    "price":        round(current_price, 2),
-                    "change_pct":   round(change_pct, 2),
-                    "rsi":          round(rsi, 1),
-                    "macd_hist":    round(macd_hist, 4),
-                    "bb_pct_b":     round(pct_b, 3),
-                    "signal_score": score,
-                    "signal":       signal,
-                    "vs_ma120":     pct_str,
-                })
+                market_data_for_ai["assets"].append({"ticker": name, "price": round(current_price, 2), "rsi": round(rsi, 1), "signal_score": score, "signal": signal})
 
                 if is_friday:
-                    prev_rsi   = prev_state.get(ticker, {}).get('rsi', None)
-                    rsi_change = f"{rsi - prev_rsi:+.1f}" if prev_rsi else "N/A"
-                    weekly_rows.append(
-                        f"{name:<6} Score:{score:>5}  RSI:{rsi:>5.1f}({rsi_change})  {icon} {signal}"
-                    )
+                    prev_rsi = prev_state.get(ticker, {}).get('rsi', None)
+                    weekly_rows.append(f"{name:<6} Score:{score:>5} RSI:{rsi:>5.1f}({rsi - prev_rsi if prev_rsi else 0:+.1f}) {icon} {signal}")
 
-            # Rotate Alert — ตรวจ Growth Portfolio
             if ticker in ROTATE_TARGETS:
                 rt = ROTATE_TARGETS[ticker]
+                trailing_stop = calculate_trailing_stop(df)
                 gain_pct = (current_price - rt['cost']) / rt['cost'] * 100
                 if current_price >= rt['target']:
-                    rotate_alerts.append(
-                        f"🚀 **{name}** ถึงเป้า Rotate! `${current_price:.2f}` ≥ `${rt['target']}` (+{gain_pct:.1f}%) — พิจารณาขาย"
-                    )
-                elif rt['stop'] and current_price <= rt['stop']:
-                    rotate_alerts.append(
-                        f"🛑 **{name}** หลุด Stop-Loss! `${current_price:.2f}` ≤ `${rt['stop']}` ({gain_pct:.1f}%) — พิจารณาขาย"
-                    )
+                    rotate_alerts.append(f"🚀 **{name}** ถึงเป้า Rotate! `${current_price:.2f}` ≥ `${rt['target']}` (+{gain_pct:.1f}%)")
+                elif current_price <= trailing_stop:
+                    rotate_alerts.append(f"🛑 **{name}** หลุด Trailing Stop! `${current_price:.2f}` ≤ `${trailing_stop:.2f}` ({gain_pct:.1f}%)")
+                else:
+                    rotate_alerts.append(f"🛡️ **{name}** Trailing Stop: `${trailing_stop:.2f}` (Current: `${current_price:.2f}`)")
 
-            # Collect DXY for AI
             if ticker == 'DX-Y.NYB':
-                market_data_for_ai["dxy"] = {
-                    "price":      round(current_price, 2),
-                    "change_pct": round(change_pct, 2),
-                    "trend":      "up" if current_price > ma120 else "down",
-                }
+                market_data_for_ai["dxy"] = {"price": round(current_price, 2), "trend": "up" if current_price > ma120 else "down"}
 
-        except Exception as e:
-            print(f"❌ Error {ticker}: {e}")
+        except Exception as e: print(f"❌ Error {ticker}: {e}")
 
     save_state(new_state)
-
-    # ── AI Commentary ─────────────────────────────────────────────────
-    print("🤖 Generating AI commentary...")
     ai_commentary = generate_ai_commentary(market_data_for_ai)
-
-    # ── Build Discord Embeds ──────────────────────────────────────────
-    embed_color = mood_color(mood_score)
-
-    tactical_header = f"{'Asset':<6} {'Price':>8} {'%Chg':>7}"
-    trend_header    = f" {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"
-
-    tactical_block = build_code_block(tactical_rows, tactical_header)
-    trend_block    = build_code_block(trend_rows, trend_header)
+    risk_label, risk_icon = calculate_risk_level(np.mean(rsi_values) if rsi_values else None, mood_score)
 
     fields = [
-        {"name": "📊 Tactical Dashboard", "value": tactical_block,                    "inline": False},
-        {"name": "📉 Trend Analysis",     "value": trend_block,                       "inline": False},
-        {"name": "🤖 AI Commentary",       "value": ai_commentary or "_No data_",     "inline": False},
+        {"name": f"🌡️ Risk Level: {risk_label} {risk_icon}", "value": f"Weighted factor from Average RSI ({round(np.mean(rsi_values),1) if rsi_values else 'N/A'}) and Fear & Greed.", "inline": False},
+        {"name": "📊 Tactical Dashboard", "value": build_code_block(tactical_rows, f"{'Asset':<6} {'Price':>8} {'%Chg':>7}"), "inline": False},
+        {"name": "📉 Trend Analysis", "value": build_code_block(trend_rows, f" {'Asset':<5} {'Price':>8} {'MA120':>8} {'vs120':>7}"), "inline": False},
+        {"name": "🤖 AI Commentary", "value": ai_commentary or "_No data_", "inline": False},
     ]
 
-    if rotate_alerts:
-        fields.append({
-            "name":   "🔄 Rotate Alert",
-            "value":  "\n".join(rotate_alerts),
-            "inline": False,
-        })
+    if rotate_alerts: fields.append({"name": "🔄 Rotation & Protection", "value": "\n".join(rotate_alerts), "inline": False})
+    if volume_alerts: fields.append({"name": "⚡ Volume Spike", "value": "\n".join(volume_alerts), "inline": False})
 
-    if volume_alerts:
-        fields.append({
-            "name":   "⚡ Volume Spike",
-            "value":  "\n".join(volume_alerts),
-            "inline": False,
-        })
-
-    if is_friday and weekly_rows:
-        weekly_block = build_code_block(weekly_rows, f"{'Asset':<6} {'Score':>6}  {'RSI':>8}  Signal")
-        fields.append({
-            "name":   "📆 Weekly Summary",
-            "value":  weekly_block,
-            "inline": False,
-        })
-
-    embed = {
-        "title":       "⚙️ ENGINEER WEALTH BOT V4.0",
-        "description": (
-            f"📅 **{date_str}**  `{time_str} ICT`\n"
-            f"🌡️ **Market Mood:** `{mood_display}`"
-        ),
-        "color":  embed_color,
-        "fields": fields,
-        "footer": {
-            "text": "Engineer Wealth Bot V4.0 • Data: Yahoo Finance + alternative.me",
-        },
+    send_discord_embed([{
+        "title": "⚙️ ENGINEER WEALTH BOT V5.0",
+        "description": f"📅 **{date_str}** `{time_str} ICT`\n🌡️ **Market Mood:** `{mood_display}`",
+        "color": mood_color(mood_score), "fields": fields,
+        "footer": {"text": "Engineer Wealth Bot V5.0 • Data: Yahoo Finance + alternative.me"},
         "timestamp": datetime.datetime.utcnow().isoformat(),
-    }
-
-    send_discord_embed([embed])
-
+    }])
 
 if __name__ == "__main__":
     get_portfolio_dashboard()
