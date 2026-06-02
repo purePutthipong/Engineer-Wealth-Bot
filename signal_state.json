@@ -1,8 +1,8 @@
 {
   "QQQM": {
     "signal": "REDUCE",
-    "rsi": 78.9,
-    "score": 74.7
+    "rsi": 78.5,
+    "score": 73.7
   },
   "SMH": {
     "signal": "REDUCE",
@@ -11,13 +11,13 @@
   },
   "GC=F": {
     "signal": "WATCH",
-    "rsi": 43.1,
-    "score": 38.9
+    "rsi": 47.3,
+    "score": 47.5
   },
   "PLTR": {
     "signal": "WAIT",
-    "rsi": 70.3,
-    "score": 88.1
+    "rsi": 70.0,
+    "score": 88.0
   },
   "ARM": {
     "signal": "WAIT",
