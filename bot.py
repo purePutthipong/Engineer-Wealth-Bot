@@ -15,11 +15,13 @@ import os
 #   - Enhanced Discord UI with Risk Metrics
 # ==============================================
 
-DISCORD_WEBHOOK_URL = os.environ.get('DISCORD_WEBHOOK')
-GROQ_API_KEY        = os.environ.get('GROQ_API_KEY')
-STATE_FILE          = "signal_state.json"
+DISCORD_WEBHOOK_URL      = os.environ.get('DISCORD_WEBHOOK')        # Pro channel
+DISCORD_FREE_WEBHOOK_URL = os.environ.get('DISCORD_FREE_WEBHOOK')   # Free channel (NEW)
+GROQ_API_KEY             = os.environ.get('GROQ_API_KEY')
+STATE_FILE               = "signal_state.json"
 
 PORT_TICKERS  = ['QQQM', 'SMH', 'GC=F', 'PLTR', 'ARM']
+FREE_TICKERS  = {'QQQM', 'SMH'}   # Free tier tickers (NEW)
 TREND_TICKERS = ['^NDX', 'QQQM', 'SMH', 'GC=F', 'DX-Y.NYB', 'PLTR', 'ARM']
 
 DISPLAY_NAME = {
@@ -199,6 +201,53 @@ def send_discord_embed(embeds: list, content: str = ""):
 def build_code_block(rows: list, header: str) -> str:
     return f"```\n{header}\n{'─' * len(header)}\n" + "\n".join(rows) + "\n```"
 
+def send_free_digest(free_rows: list, mood_score, mood_display: str, risk_label: str, risk_icon: str):
+    """Phase 1: Free tier — QQQM+SMH digest only, no AI commentary."""
+    if not DISCORD_FREE_WEBHOOK_URL:
+        return
+
+    thai_now = datetime.datetime.utcnow() + datetime.timedelta(hours=7)
+    date_str = thai_now.strftime('%d %b %Y')
+    time_str = thai_now.strftime('%H:%M')
+
+    fields = [
+        {
+            "name": f"🌡️ Risk Level: {risk_label} {risk_icon}",
+            "value": "Weighted factor from RSI and Fear & Greed Index",
+            "inline": False,
+        },
+        {
+            "name": "📊 DCA Portfolio Signals",
+            "value": build_code_block(free_rows, f"{'Asset':<6} {'Price':>8} {'%Chg':>7}"),
+            "inline": False,
+        },
+        {
+            "name": "🔒 Pro Features",
+            "value": "✨ **Upgrade to Pro** for:\n• PLTR + ARM signals\n• Custom tickers\n• AI Commentary\n• Rotate alerts\n👉 [Subscribe $9.99/month](https://ko-fi.com/engineerwealthbot)",
+            "inline": False,
+        },
+    ]
+
+    payload = {
+        "username": "Engineer Wealth Bot (Free)",
+        "avatar_url": "https://raw.githubusercontent.com/purePutthipong/Engineer-Wealth-Bot/main/assets/bot_avatar.png",
+        "embeds": [{
+            "title": "⚙️ ENGINEER WEALTH BOT — Free Daily Digest",
+            "description": f"📅 **{date_str}** `{time_str} ICT`\n🌡️ **Market Mood:** `{mood_display}`",
+            "color": mood_color(mood_score),
+            "fields": fields,
+            "footer": {"text": "Free Tier • Upgrade for full signals + AI commentary"},
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+        }],
+    }
+
+    try:
+        r = requests.post(DISCORD_FREE_WEBHOOK_URL, json=payload, timeout=15)
+        r.raise_for_status()
+        print("✅ Free digest sent")
+    except Exception as e:
+        print(f"❌ Free Discord error: {e}")
+
 # ==============================================
 #   MAIN
 # ==============================================
@@ -217,6 +266,7 @@ def get_portfolio_dashboard():
     new_state  = {}
 
     tactical_rows = []
+    free_rows     = []   # NEW: for free channel
     trend_rows    = []
     volume_alerts = []
     weekly_rows   = []
@@ -264,6 +314,9 @@ def get_portfolio_dashboard():
                 chg_icon = "▲" if change_pct > 0 else "▼"
                 tactical_rows.append(f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}")
 
+                if ticker in FREE_TICKERS:
+                    free_rows.append(f"**{name}** {current_price:>8.2f} {chg_icon}{abs(change_pct):>4.1f}%\n└ RSI:{rsi:>4.1f} Score:{score:>4} {icon} {display_signal}")
+
                 market_data_for_ai["assets"].append({"ticker": name, "price": round(current_price, 2), "rsi": round(rsi, 1), "signal_score": score, "signal": signal})
 
                 if is_friday:
@@ -299,6 +352,7 @@ def get_portfolio_dashboard():
 
     if rotate_alerts: fields.append({"name": "🔄 Rotation & Protection", "value": "\n".join(rotate_alerts), "inline": False})
     if volume_alerts: fields.append({"name": "⚡ Volume Spike", "value": "\n".join(volume_alerts), "inline": False})
+    if weekly_rows:   fields.append({"name": "📆 Weekly Summary (Friday)", "value": build_code_block(weekly_rows, f"{'Asset':<6} {'Score':>8} {'RSI':>9} Signal"), "inline": False})
 
     send_discord_embed([{
         "title": "⚙️ ENGINEER WEALTH BOT V5.0",
@@ -307,6 +361,9 @@ def get_portfolio_dashboard():
         "footer": {"text": "Engineer Wealth Bot V5.0 • Data: Yahoo Finance + alternative.me"},
         "timestamp": datetime.datetime.utcnow().isoformat(),
     }])
+    
+    # Send Free Digest (NEW V6)
+    send_free_digest(free_rows, mood_score, mood_display, risk_label, risk_icon)
 
 if __name__ == "__main__":
     get_portfolio_dashboard()
